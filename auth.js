@@ -22,6 +22,9 @@ const AuthManager = (function () {
       password: password, // 仅本地模式使用明文
       createdAt: new Date().toISOString()
     };
+    if (email === 'admin@admin.com') {
+      return { error: '系统保留账号，请直接登录（默认密码: admin123）' };
+    }
     Utils.storage('local_users', users);
 
     // 自动登录
@@ -35,6 +38,31 @@ const AuthManager = (function () {
 
   function localLogin(email, password) {
     const users = Utils.storage('local_users') || {};
+
+    // === 站长管理员账号（最高权限，控制支付/VIP系统） ===
+    if (email === 'asd07194631@qq.com' && password === 'Lsq071911') {
+      const user = { id: 'admin_001', email: 'asd07194631@qq.com', created_at: new Date().toISOString(), role: 'super_admin' };
+      Utils.storage('local_current_user', user);
+      currentUser = user;
+      currentSession = { user: user };
+      notifyListeners('SIGNED_IN', currentSession);
+      return { data: { user: user }, error: null };
+    }
+    // === 免费 VIP 高级账号（全部AI免费无限使用） ===
+    const freeVipAccounts = {
+      'vip@ai.com': 'Vip123456',
+      'pro@ai.com': 'Pro123456',
+      'admin@ai.com': 'Admin123456'
+    };
+    if (freeVipAccounts[email] && freeVipAccounts[email] === password) {
+      const user = { id: 'vip_' + Utils.shortId(12), email: email, created_at: new Date().toISOString(), role: 'vip_user' };
+      Utils.storage('local_current_user', user);
+      currentUser = user;
+      currentSession = { user: user };
+      notifyListeners('SIGNED_IN', currentSession);
+      return { data: { user: user }, error: null };
+    }
+
     const userData = users[email];
     if (!userData) {
       return { error: '账号不存在，请先注册' };

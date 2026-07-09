@@ -13,8 +13,8 @@ const AdminManager = (function () {
   }
 
   function isAdmin() {
-    // 年卡 VIP 具有管理员权限（简化判断）
-    return MemberManager.getLevel() === 'vip_year';
+    const level = MemberManager.getLevel();
+    return level === 'vip_year' || level === 'super_admin' || level === 'vip_user';
   }
 
   function renderAdminPage(container) {
@@ -43,6 +43,8 @@ const AdminManager = (function () {
     html += '<button class="admin-tab' + (currentTab === 'dashboard' ? ' active' : '') + '" data-tab="dashboard">仪表盘</button>';
     html += '<button class="admin-tab' + (currentTab === 'users' ? ' active' : '') + '" data-tab="users">用户管理</button>';
     html += '<button class="admin-tab' + (currentTab === 'codes' ? ' active' : '') + '" data-tab="codes">会员码管理</button>';
+    html += '<button class="admin-tab' + (currentTab === 'vip_control' ? ' active' : '') + '" data-tab="vip_control">VIP控制</button>';
+    html += '<button class="admin-tab' + (currentTab === 'settings' ? ' active' : '') + '" data-tab="settings">系统设置</button>';
     html += '</div>';
 
     html += '<div class="admin-content" id="admin-content">';
@@ -53,6 +55,10 @@ const AdminManager = (function () {
       html += renderUsers();
     } else if (currentTab === 'codes') {
       html += renderCodes();
+    } else if (currentTab === 'vip_control') {
+      html += renderVipControl();
+    } else if (currentTab === 'settings') {
+      html += renderSettings();
     }
 
     html += '</div>';
@@ -69,6 +75,7 @@ const AdminManager = (function () {
     if (currentTab === 'dashboard') loadDashboardData();
     if (currentTab === 'users') loadUsersData();
     if (currentTab === 'codes') loadCodesData();
+    if (currentTab === 'vip_control') loadVipControlData();
   }
 
   function renderDashboard() {
@@ -123,6 +130,56 @@ const AdminManager = (function () {
     `;
   }
 
+  function renderSettings() {
+    const config = Utils.storage('app_config') || {};
+    const user = AuthManager.getCurrentUser();
+    const vipConfig = Utils.storage('vip_system_config') || {};
+    let html = '<div class="settings-page">';
+    
+    // 账号信息
+    html += '<div class="settings-section"><h3>管理员账号信息</h3>';
+    html += '<div class="settings-field"><label>邮箱</label><span>' + Utils.escapeHtml(user ? user.email : '-') + '</span></div>';
+    html += '<div class="settings-field"><label>角色</label><span style="color:var(--accent);">站长 · 超级管理员（全部AI免费无限使用，控制VIP/支付系统）</span></div>';
+    html += '</div>';
+
+    // 站点设置
+    html += '<div class="settings-section"><h3>站点设置</h3>';
+    
+    html += '<div class="settings-field"><label>网站名称</label><input type="text" id="set-site-name" class="form-input" value="' + Utils.escapeHtml(config.siteName || 'AI聚合') + '" style="max-width:300px;" /></div>';
+    
+    html += '<div class="settings-field"><label>主题</label><select id="set-theme" class="form-input" style="max-width:200px;">';
+    html += '<option value="dark"' + (config.theme !== 'light' ? ' selected' : '') + '>深色</option>';
+    html += '<option value="light"' + (config.theme === 'light' ? ' selected' : '') + '>浅色</option>';
+    html += '</select></div>';
+
+    html += '<div class="settings-field"><label>默认模型</label><select id="set-default-model" class="form-input" style="max-width:300px;">';
+    const models = ModelRegistry ? ModelRegistry.getAllModels() : [];
+    models.forEach(function(m) {
+      const sel = (config.defaultModel || 'openai/gpt-4o-mini') === m.id ? ' selected' : '';
+      html += '<option value="' + m.id + '"' + sel + '>' + Utils.escapeHtml(m.name) + '</option>';
+    });
+    html += '</select></div>';
+
+    html += '<div class="settings-field"><label>每日免费调用次数</label><input type="number" id="set-daily-free-limit" class="form-input" value="' + (config.dailyFreeLimit || 20) + '" style="max-width:100px;" min="1" max="999" /></div>';
+
+    html += '<div class="settings-field" style="margin-top:16px;"><button class="btn btn-primary" id="btn-save-settings">保存设置</button></div>';
+    html += '</div>';
+
+    // 系统级 OpenRouter API Key（全局配置，所有AI模型依赖此Key工作）
+    html += '<div class="settings-section"><h3>OpenRouter API Key（全局配置）</h3>';
+    html += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">'
+      + '所有 AI 模型通过 OpenRouter 统一调用。配置后全部用户均可使用真实 AI 对话。'
+      + '从 <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--accent);">openrouter.ai/keys</a> 免费注册获取 Key。</p>';
+    const savedKey = Utils.storage('openrouter_api_key') || '';
+    html += '<div class="settings-field"><label>API Key</label><input type="password" id="set-api-key" class="form-input" value="' + Utils.escapeHtml(savedKey) + '" placeholder="sk-or-..." style="max-width:450px;" /></div>';
+    html += '<div class="settings-field"><span style="font-size:12px;color:var(--text-muted);">当前状态：' + (savedKey ? '<span style="color:var(--success);">已配置（真实调用模式）</span>' : '<span style="color:var(--warning);">未配置（模拟模式，AI不真实工作）</span>') + '</span></div>';
+    html += '<div class="settings-field" style="margin-top:8px;"><button class="btn btn-primary" id="btn-save-api-key">保存 API Key</button><button class="btn btn-outline" id="btn-clear-api-key" style="margin-left:8px;">清除</button></div>';
+    html += '</div>';
+
+    html += '</div>';
+    return html;
+  }
+
   function renderCodes() {
     return `
       <div class="code-generate-panel">
@@ -170,7 +227,78 @@ const AdminManager = (function () {
     `;
   }
 
-  // ============ 数据加载 ============
+  // ============ VIP 控制面板 ============
+
+  function renderVipControl() {
+    const vipConfig = Utils.storage('vip_system_config') || { enabled: true, paymentEnabled: false };
+    return `
+      <div class="vip-control-panel">
+        <div class="settings-section">
+          <h3>VIP 系统总开关</h3>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">关闭后所有用户无需付费即可访问全部功能</p>
+          <div class="toggle-row">
+            <label class="toggle-label">
+              <span>VIP 付费系统</span>
+              <span id="vip-status-text" style="color:` + (vipConfig.enabled ? 'var(--success)' : 'var(--danger)') + `;font-size:13px;">` + (vipConfig.enabled ? '已启用' : '已关闭') + `</span>
+            </label>
+            <label class="switch">
+              <input type="checkbox" id="vip-system-toggle" ` + (vipConfig.enabled ? 'checked' : '') + ` />
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>支付系统状态</h3>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">支付系统目前为本地模式，管理员可直接手动分配VIP</p>
+          <div class="toggle-row">
+            <label class="toggle-label">
+              <span>模拟支付</span>
+              <span id="payment-status-text" style="color:` + (vipConfig.paymentEnabled ? 'var(--success)' : 'var(--warning)') + `;font-size:13px;">` + (vipConfig.paymentEnabled ? '已启用' : '未启用') + `</span>
+            </label>
+            <label class="switch">
+              <input type="checkbox" id="payment-system-toggle" ` + (vipConfig.paymentEnabled ? 'checked' : '') + ` />
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>手动分配 VIP</h3>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">直接给指定用户开通或取消 VIP 权限</p>
+          <div class="vip-assign-form">
+            <div class="form-group">
+              <label class="form-label">用户邮箱</label>
+              <input type="text" id="vip-assign-email" class="form-input" placeholder="输入用户邮箱" style="max-width:320px;" />
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">VIP 等级</label>
+                <select id="vip-assign-level" class="form-input">
+                  <option value="free">免费用户（取消VIP）</option>
+                  <option value="vip_month">月卡 VIP</option>
+                  <option value="vip_year">年卡 VIP</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">有效天数</label>
+                <input type="number" id="vip-assign-days" class="form-input" value="30" min="1" max="3650" style="max-width:100px;" />
+              </div>
+            </div>
+            <button class="btn btn-primary" id="btn-assign-vip">分配 VIP</button>
+            <span id="vip-assign-result" style="margin-left:12px;font-size:13px;"></span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>当前用户 VIP 状态</h3>
+          <div id="vip-users-status">
+            <p style="color:var(--text-muted);">加载中...</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
   function loadDashboardData() {
     // 本地模式下的统计
@@ -320,6 +448,81 @@ const AdminManager = (function () {
     return code;
   }
 
+  // ============ VIP 控制面板数据加载 ============
+
+  function loadVipControlData() {
+    // 加载 VIP 用户状态
+    const users = Utils.storage('local_users') || {};
+    const currentUser = AuthManager.getCurrentUser();
+    let vipUsers = [];
+
+    // 当前用户
+    if (currentUser) {
+      vipUsers.push({
+        email: currentUser.email,
+        level: MemberManager.getLevel(),
+        is_vip: MemberManager.isVip(),
+        is_super_admin: MemberManager.isSuperAdmin()
+      });
+    }
+
+    // 其他用户
+    Object.keys(users).forEach(function (email) {
+      const user = users[email];
+      vipUsers.push({
+        email: email,
+        level: 'free',
+        is_vip: false,
+        is_super_admin: false,
+        created_at: user.createdAt
+      });
+    });
+
+    // 渲染
+    const container = document.getElementById('vip-users-status');
+    if (!container) return;
+
+    if (vipUsers.length === 0) {
+      container.innerHTML = '<p style="color:var(--text-muted);">暂无用户数据</p>';
+      return;
+    }
+
+    let html = '<div class="vip-users-table">';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+    html += '<thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid var(--border-color);">邮箱</th><th style="text-align:left;padding:8px;border-bottom:1px solid var(--border-color);">VIP状态</th><th style="text-align:left;padding:8px;border-bottom:1px solid var(--border-color);">操作</th></tr></thead>';
+    html += '<tbody>';
+
+    vipUsers.forEach(function (u) {
+      const levelText = u.level === 'super_admin' ? '站长' : u.level === 'vip_user' ? '免费VIP' : u.level === 'vip_year' ? '年卡VIP' : u.level === 'vip_month' ? '月卡VIP' : '免费用户';
+      const levelColor = u.level === 'super_admin' ? 'var(--accent)' : u.is_vip ? 'var(--success)' : 'var(--text-muted)';
+      html += '<tr>';
+      html += '<td style="padding:8px;border-bottom:1px solid var(--border-color);">' + Utils.escapeHtml(u.email) + '</td>';
+      html += '<td style="padding:8px;border-bottom:1px solid var(--border-color);color:' + levelColor + ';">' + levelText + '</td>';
+      html += '<td style="padding:8px;border-bottom:1px solid var(--border-color);">';
+      if (!u.is_super_admin) {
+        html += '<button class="btn btn-outline btn-xs assign-vip-btn" data-email="' + Utils.escapeHtml(u.email) + '">分配VIP</button>';
+      } else {
+        html += '<span style="color:var(--text-muted);font-size:12px;">站长账号</span>';
+      }
+      html += '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+
+    // 绑定分配按钮
+    container.querySelectorAll('.assign-vip-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const email = btn.getAttribute('data-email');
+        document.getElementById('vip-assign-email').value = email;
+        // 滚动到分配表单
+        const assignSection = document.querySelector('.vip-assign-form');
+        if (assignSection) assignSection.scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+  }
+
   // ============ 事件绑定 ============
 
   function bindAdminEvents(container) {
@@ -371,6 +574,61 @@ const AdminManager = (function () {
       });
     }
 
+    // 保存设置
+    const saveSettingsBtn = container.querySelector('#btn-save-settings');
+    if (saveSettingsBtn) {
+      saveSettingsBtn.addEventListener('click', function() {
+        const config = Utils.storage('app_config') || {};
+        config.siteName = (container.querySelector('#set-site-name') || {}).value || 'AI聚合';
+        config.theme = (container.querySelector('#set-theme') || {}).value || 'dark';
+        config.defaultModel = (container.querySelector('#set-default-model') || {}).value || 'openai/gpt-4o-mini';
+        config.dailyFreeLimit = parseInt((container.querySelector('#set-daily-free-limit') || {}).value, 10) || 20;
+        Utils.storage('app_config', config);
+        
+        // 应用主题
+        document.documentElement.setAttribute('data-theme', config.theme);
+        document.body.className = config.theme === 'light' ? 'light-theme' : '';
+        
+        // 应用默认模型
+        if (config.defaultModel) {
+          Utils.storage('current_model', config.defaultModel);
+        }
+        
+        // 更新网站标题
+        document.title = config.siteName + ' · 智能大模型中转站';
+        
+        Utils.showToast('设置已保存', 'success');
+      });
+    }
+
+    // 保存 API Key
+    const saveApiBtn = container.querySelector('#btn-save-api-key');
+    if (saveApiBtn) {
+      saveApiBtn.addEventListener('click', function() {
+        const keyInput = container.querySelector('#set-api-key');
+        if (keyInput) {
+          const key = keyInput.value.trim();
+          if (key) {
+            ApiService.setUserKey(key);
+            Utils.showToast('API Key 已保存', 'success');
+          } else {
+            Utils.showToast('请输入有效的 API Key', 'warning');
+          }
+        }
+      });
+    }
+
+    // 清除 API Key
+    const clearApiBtn = container.querySelector('#btn-clear-api-key');
+    if (clearApiBtn) {
+      clearApiBtn.addEventListener('click', function() {
+        ApiService.setUserKey(null);
+        const keyInput = container.querySelector('#set-api-key');
+        if (keyInput) keyInput.value = '';
+        Utils.showToast('API Key 已清除', 'info');
+      });
+    }
+
     // 用户搜索
     const userSearch = container.querySelector('#user-search');
     if (userSearch) {
@@ -381,6 +639,78 @@ const AdminManager = (function () {
           const text = row.textContent.toLowerCase();
           row.style.display = q && !text.includes(q) ? 'none' : '';
         });
+      });
+    }
+
+    // ============ VIP 控制面板事件 ============
+
+    // VIP 系统开关
+    const vipToggle = container.querySelector('#vip-system-toggle');
+    if (vipToggle) {
+      vipToggle.addEventListener('change', function () {
+        const config = Utils.storage('vip_system_config') || {};
+        config.enabled = vipToggle.checked;
+        Utils.storage('vip_system_config', config);
+        const statusText = container.querySelector('#vip-status-text');
+        if (statusText) {
+          statusText.textContent = config.enabled ? '已启用' : '已关闭';
+          statusText.style.color = config.enabled ? 'var(--success)' : 'var(--danger)';
+        }
+        Utils.showToast('VIP 系统已' + (config.enabled ? '启用' : '关闭'), config.enabled ? 'success' : 'warning');
+      });
+    }
+
+    // 支付系统开关
+    const paymentToggle = container.querySelector('#payment-system-toggle');
+    if (paymentToggle) {
+      paymentToggle.addEventListener('change', function () {
+        const config = Utils.storage('vip_system_config') || {};
+        config.paymentEnabled = paymentToggle.checked;
+        Utils.storage('vip_system_config', config);
+        const statusText = container.querySelector('#payment-status-text');
+        if (statusText) {
+          statusText.textContent = config.paymentEnabled ? '已启用' : '未启用';
+          statusText.style.color = config.paymentEnabled ? 'var(--success)' : 'var(--warning)';
+        }
+        Utils.showToast('支付系统已' + (config.paymentEnabled ? '启用' : '关闭'), 'info');
+      });
+    }
+
+    // 手动分配 VIP
+    const assignBtn = container.querySelector('#btn-assign-vip');
+    if (assignBtn) {
+      assignBtn.addEventListener('click', function () {
+        const email = (container.querySelector('#vip-assign-email') || {}).value;
+        const level = (container.querySelector('#vip-assign-level') || {}).value;
+        const days = parseInt((container.querySelector('#vip-assign-days') || {}).value, 10) || 30;
+        const resultEl = container.querySelector('#vip-assign-result');
+
+        if (!email) {
+          if (resultEl) { resultEl.textContent = '请输入用户邮箱'; resultEl.style.color = 'var(--danger)'; }
+          return;
+        }
+
+        // 查找用户
+        const users = Utils.storage('local_users') || {};
+        const currentUser = AuthManager.getCurrentUser();
+
+        if (currentUser && currentUser.email === email) {
+          // 操作当前用户
+          currentUser.vip_level = level;
+          currentUser.vip_expires = level === 'free' ? null : new Date(Date.now() + days * 86400000).toISOString();
+          Utils.storage('local_current_user', currentUser);
+          if (resultEl) { resultEl.textContent = 'VIP 已分配成功: ' + (level === 'free' ? '已取消VIP' : level + ' (' + days + '天)'); resultEl.style.color = 'var(--success)'; }
+        } else if (users[email]) {
+          users[email].vip_level = level;
+          users[email].vip_expires = level === 'free' ? null : new Date(Date.now() + days * 86400000).toISOString();
+          Utils.storage('local_users', users);
+          if (resultEl) { resultEl.textContent = 'VIP 已分配成功: ' + (level === 'free' ? '已取消VIP' : level + ' (' + days + '天)'); resultEl.style.color = 'var(--success)'; }
+        } else {
+          if (resultEl) { resultEl.textContent = '未找到该用户'; resultEl.style.color = 'var(--danger)'; }
+        }
+
+        // 刷新用户列表
+        setTimeout(function () { loadVipControlData(); }, 500);
       });
     }
 

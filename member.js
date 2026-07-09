@@ -10,7 +10,8 @@ const MemberManager = (function () {
   const LEVELS = {
     free: { name: '免费用户', dailyLimit: 20, unlimited: false, canUsePremium: false, canSetApiKey: false },
     vip_month: { name: '月卡 VIP', dailyLimit: -1, unlimited: true, canUsePremium: true, canSetApiKey: false, price: '99元/月' },
-    vip_year: { name: '年卡 VIP', dailyLimit: -1, unlimited: true, canUsePremium: true, canSetApiKey: true, price: '699元/年' }
+    vip_year: { name: '年卡 VIP', dailyLimit: -1, unlimited: true, canUsePremium: true, canSetApiKey: true, price: '699元/年' },
+    super_admin: { name: '超级管理员', dailyLimit: -1, unlimited: true, canUsePremium: true, canSetApiKey: true, price: '-' }
   };
 
   let currentMemberInfo = null;
@@ -135,15 +136,31 @@ const MemberManager = (function () {
     return currentMemberInfo;
   }
 
-  function getLevel() {
-    return currentMemberInfo ? currentMemberInfo.level : 'free';
+  function isSuperAdmin() {
+    const user = AuthManager.getCurrentUser();
+    return user && (user.role === 'super_admin' || user.email === 'asd07194631@qq.com');
+  }
+
+  function isVipUser() {
+    const user = AuthManager.getCurrentUser();
+    return user && user.role === 'vip_user';
   }
 
   function isVip() {
+    if (isSuperAdmin()) return true;
+    if (isVipUser()) return true;
     return getLevel() !== 'free';
   }
 
+  function getLevel() {
+    if (isSuperAdmin()) return 'super_admin';
+    checkDailyReset();
+    return currentMemberInfo ? currentMemberInfo.level : 'free';
+  }
+
   function canUseModel(model) {
+    if (isSuperAdmin()) return true;
+    if (isVipUser()) return true;
     if (!model) return true;
     const memberInfo = getMemberInfo();
     if (!memberInfo) return model.category === 'free';
@@ -152,6 +169,8 @@ const MemberManager = (function () {
   }
 
   function checkDailyLimit() {
+    if (isSuperAdmin()) return { allowed: true };
+    if (isVipUser()) return { allowed: true };
     const memberInfo = getMemberInfo();
     if (!memberInfo) return { allowed: false, reason: '无法获取会员信息' };
     if (memberInfo.unlimited) return { allowed: true };
@@ -259,7 +278,7 @@ const MemberManager = (function () {
     html += '<div class="member-stats">';
     html += '<div class="member-stat-card">';
     html += '<div class="member-stat-label">当前等级</div>';
-    html += '<div class="member-stat-value"><span class="level-badge ' + level + '">' + levelDef.name + '</span></div>';
+    html += '<div class="member-stat-value"><span class="level-badge ' + level + '">' + levelDef.name + '</span>' + (level === 'super_admin' ? ' <span style="color:var(--accent);font-size:13px;">最高权限 · 全部AI免费使用</span>' : '') + '</div>';
     html += '</div>';
 
     html += '<div class="member-stat-card">';
@@ -485,6 +504,8 @@ const MemberManager = (function () {
     getMemberInfo,
     getLevel,
     isVip,
+    isVipUser,
+    isSuperAdmin,
     canUseModel,
     checkDailyLimit,
     incrementUsage,
