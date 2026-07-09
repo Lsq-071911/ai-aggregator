@@ -1,16 +1,27 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI聚合 · 管理后台</title>
-  <script>
-    // 管理员独立入口：自动跳转到主应用的管理后台路由
-    // 若未登录，主应用会自动重定向到登录页
-    window.location.replace('../index.html#/admin');
-  </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="description" content="AI聚合大模型中转站">
+<meta name="theme-color" content="#0A0A0F">
+<title>AI聚合 · 智能大模型中转站</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
-  <p>正在跳转到管理后台...</p>
+<div class="preloader" id="preloader"><div class="preloader-logo"><div class="preloader-ring"></div><div class="preloader-core">AI</div></div><div class="preloader-bar"><div class="preloader-bar-fill"></div></div><div class="preloader-text">正在加载智能中枢...</div></div>
+<div id="app-root"></div>
+<div class="toast-container" id="toast-container"></div>
+<div class="modal-overlay" id="modal-overlay" style="display:none"></div>
+<script src="supabase.js"></script>
+<script src="utils.js"></script>
+<script src="models.js"></script>
+<script src="api.js"></script>
+<script src="auth.js"></script>
+<script src="member.js"></script>
+<script src="chat.js"></script>
+<script src="admin.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
