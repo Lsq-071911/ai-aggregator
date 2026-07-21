@@ -141,21 +141,6 @@ const ChatManager = (function () {
     // 权限检查
     const model = getModel();
 
-    // 会员权限
-    if (!MemberManager.canUseModel(model)) {
-      Utils.showToast('免费用户无法使用 ' + model.name + '，请升级 VIP', 'warning');
-      return;
-    }
-
-    // 每日限制
-    if (!MemberManager.isVip()) {
-      const limitCheck = MemberManager.checkDailyLimit();
-      if (!limitCheck.allowed) {
-        Utils.showToast(limitCheck.reason, 'warning');
-        return;
-      }
-    }
-
     // 更新对话标题
     const conv = conversations.find(function (c) { return c.id === currentChatId; });
     if (conv && (!conv.title || conv.title === '新对话')) {
@@ -268,9 +253,9 @@ const ChatManager = (function () {
     const model = getModel();
     const modelName = model ? model.name : 'AI';
     const responses = [
-      '您好！我是 ' + modelName + '。由于尚未配置 OpenRouter API Key，我目前处于模拟模式。\n\n您可以：\n1. 在**会员中心**设置您的 API Key（年卡VIP支持）\n2. 联系管理员配置系统级 API Key\n\n配置后即可使用真实的 AI 对话功能。',
+      '您好！我是 ' + modelName + '。由于尚未配置 OpenRouter API Key，我目前处于模拟模式。\n\n您可以：\n1. 在**设置中心**设置您的 API Key\n2. 访问 openrouter.ai/keys 免费获取 Key\n\n配置后即可使用真实的 AI 对话功能。',
       '这是一个模拟回复。\n\n您的问题是：「' + Utils.truncateText(userContent, 100) + '」\n\n在正式环境中，' + modelName + ' 将会为您提供高质量的回复。请配置 OpenRouter API Key 来启用完整功能。',
-      '感谢您的提问！\n\n当前系统运行在模拟模式，真实 AI 对话需要 OpenRouter API Key。\n\n```\n// 配置方法\n1. 访问 openrouter.ai/keys\n2. 创建 API Key\n3. 在会员中心设置\n```\n\n配置完成后即可使用 50+ 大模型。'
+      '感谢您的提问！\n\n当前系统运行在模拟模式，真实 AI 对话需要 OpenRouter API Key。\n\n```\n// 配置方法\n1. 访问 openrouter.ai/keys\n2. 创建 API Key\n3. 在设置中心填入 Key\n```\n\n配置完成后即可使用 50+ 大模型。'
     ];
 
     const response = responses[Math.floor(Math.random() * responses.length)];
@@ -343,8 +328,8 @@ const ChatManager = (function () {
               <span class="model-select-chevron">▼</span>
             </div>
             <div class="chat-header-actions">
-              <button class="btn btn-ghost btn-sm" id="btn-member" title="会员中心">VIP</button>
-              <button class="btn btn-ghost btn-sm" id="btn-admin" title="管理后台" style="display:none;">管理</button>
+              <button class="btn btn-ghost btn-sm" id="btn-member" title="设置中心">设置</button>
+              <button class="btn btn-ghost btn-sm" id="btn-admin" title="管理后台">管理</button>
               <button class="btn btn-ghost btn-sm" id="btn-clear-chat" title="清空对话">清空</button>
             </div>
             <div class="model-dropdown" id="model-dropdown"></div>
@@ -383,11 +368,6 @@ const ChatManager = (function () {
     renderModelDropdown();
     updateModelDisplay();
     renderMessages();
-
-    // 管理员按钮显示
-    if (domCache['btn-admin'] && MemberManager.getLevel() === 'vip_year') {
-      domCache['btn-admin'].style.display = '';
-    }
 
     // 绑定事件
     bindChatEvents();
@@ -439,13 +419,11 @@ const ChatManager = (function () {
 
     // 用户信息
     const user = AuthManager.getCurrentUser();
-    const level = MemberManager.getLevel();
-    const levelNames = { free: '免费用户', vip_month: '月卡 VIP', vip_year: '年卡 VIP' };
     domCache['sidebar-user'].innerHTML = `
       <div class="sidebar-avatar">${user ? (user.email || '?')[0].toUpperCase() : '?'}</div>
       <div class="sidebar-user-info">
         <div class="sidebar-user-name">${Utils.escapeHtml(user ? (user.email || '用户') : '未登录')}</div>
-        <div class="sidebar-user-level ${level !== 'free' ? 'vip' : ''}">${levelNames[level] || '免费用户'}</div>
+        <div class="sidebar-user-level" style="color:var(--success);">全功能免费</div>
       </div>
       <button class="sidebar-logout" id="sidebar-logout" title="注销">⏻</button>
     `;
@@ -492,7 +470,7 @@ const ChatManager = (function () {
         html += '<div class="model-item-name">' + Utils.escapeHtml(m.name) + '</div>';
         html += '<div class="model-item-desc">' + Utils.escapeHtml(m.desc) + '</div>';
         html += '</div>';
-        html += '<span class="model-item-badge ' + m.category + '">' + (m.category === 'free' ? '免费' : '付费') + '</span>';
+        html += '<span class="model-item-badge">可用</span>';
         html += '</div>';
       });
       html += '</div>';
@@ -803,7 +781,7 @@ const ChatManager = (function () {
       });
     }
 
-    // 会员按钮
+    // 设置按钮
     if (domCache['btn-member']) {
       domCache['btn-member'].addEventListener('click', function () {
         if (typeof App !== 'undefined' && App.navigate) {

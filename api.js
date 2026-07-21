@@ -61,7 +61,7 @@ const ApiService = (function () {
     options = options || {};
 
     if (!hasKey()) {
-      if (callbacks.onError) callbacks.onError('请先配置 API Key（会员中心可设置自定义 Key）');
+      if (callbacks.onError) callbacks.onError('请先配置 API Key（系统设置中可配置 API Key）');
       return;
     }
 
@@ -154,13 +154,13 @@ const ApiService = (function () {
 
       // 401/403 → Token 无效
       if (response.status === 401 || response.status === 403) {
-        if (callbacks.onError) callbacks.onError('API Key 无效或已过期，请在会员中心重新配置');
+        if (callbacks.onError) callbacks.onError('API Key 无效或已过期，请在系统设置中重新配置');
         return;
       }
 
       // 402 → 余额不足
       if (response.status === 402) {
-        if (callbacks.onError) callbacks.onError('OpenRouter 账户余额不足，请充值');
+        if (callbacks.onError) callbacks.onError('OpenRouter 账户余额不足，请检查API Key余额');
         return;
       }
 
