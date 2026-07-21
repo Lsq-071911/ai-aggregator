@@ -513,7 +513,7 @@ code, kbd, pre { font-family: var(--font-mono); }
   font-size: 11px;
   color: var(--text-muted);
 }
-.sidebar-user-level.vip { color: var(--warning); }
+
 .sidebar-logout {
   width: 32px;
   height: 32px;
@@ -962,160 +962,6 @@ code, kbd, pre { font-family: var(--font-mono); }
   color: var(--text-muted);
 }
 
-/* ---- 11. 会员中心 ---- */
-.member-page {
-  padding: var(--space-8);
-  max-width: 1100px;
-  margin: 0 auto;
-  min-height: 100vh;
-}
-.member-header {
-  text-align: center;
-  margin-bottom: var(--space-10);
-}
-.member-header h2 {
-  font-size: 32px;
-  font-weight: 700;
-  margin-bottom: var(--space-2);
-}
-.member-header p { color: var(--text-secondary); font-size: 15px; }
-.member-stats {
-  display: flex;
-  gap: var(--space-4);
-  margin-bottom: var(--space-10);
-  flex-wrap: wrap;
-}
-.member-stat-card {
-  flex: 1;
-  min-width: 200px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: var(--space-5);
-}
-.member-stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: var(--space-2); }
-.member-stat-value { font-size: 28px; font-weight: 700; }
-.member-stat-sub { font-size: 12px; color: var(--text-secondary); margin-top: var(--space-1); }
-.usage-progress-bar {
-  width: 100%;
-  height: 6px;
-  background: var(--bg-dark);
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  margin-top: var(--space-2);
-}
-.usage-progress-fill {
-  height: 100%;
-  border-radius: var(--radius-full);
-  background: linear-gradient(90deg, var(--primary), var(--accent));
-  transition: width 0.5s var(--ease-smooth);
-}
-
-/* VIP套餐卡片 */
-.plan-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-6);
-  margin-bottom: var(--space-10);
-}
-.plan-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-xl);
-  padding: var(--space-8) var(--space-6);
-  transition: all var(--transition-base);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-.plan-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-}
-.plan-card.featured {
-  border: 2px solid var(--primary);
-  box-shadow: var(--shadow-glow);
-}
-.plan-card.current { border-color: var(--success); }
-.plan-badge {
-  position: absolute;
-  top: -12px;
-  right: var(--space-6);
-  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-  color: white;
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
-  font-size: 11px;
-  font-weight: 700;
-}
-.plan-badge.current { background: linear-gradient(135deg, var(--success), #27AE60); }
-.plan-name { font-size: 20px; font-weight: 700; margin-bottom: var(--space-1); }
-.plan-price { margin-bottom: var(--space-6); }
-.plan-price-amount { font-size: 40px; font-weight: 800; background: linear-gradient(135deg, var(--primary-light), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-.plan-price-period { font-size: 14px; color: var(--text-muted); }
-.plan-features { list-style: none; flex: 1; margin-bottom: var(--space-6); }
-.plan-features li {
-  padding: var(--space-2) 0;
-  font-size: 14px;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.plan-features li::before {
-  content: '✓';
-  color: var(--success);
-  font-weight: 700;
-}
-.plan-features li.disabled { color: var(--text-muted); opacity: 0.6; }
-.plan-features li.disabled::before { content: '—'; color: var(--text-muted); }
-.plan-cta {
-  width: 100%;
-  height: 44px;
-  border-radius: var(--radius-md);
-  font-weight: 600;
-  font-size: 14px;
-}
-.plan-cta .current-label {
-  background: rgba(46, 204, 113, 0.1);
-  border: 1px solid var(--success);
-  color: var(--success);
-}
-
-/* 会员码激活 */
-.activate-section {
-  max-width: 500px;
-  margin: 0 auto;
-  text-align: center;
-}
-.activate-section h3 { font-size: 20px; margin-bottom: var(--space-6); }
-.activate-input-group {
-  display: flex;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
-}
-.activate-input-group input {
-  flex: 1;
-  height: 48px;
-  padding: 0 var(--space-4);
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-size: 16px;
-  font-family: var(--font-mono);
-  letter-spacing: 2px;
-  outline: none;
-  text-transform: uppercase;
-}
-.activate-input-group input:focus {
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px var(--border-glow);
-}
-.activate-input-group input::placeholder {
-  letter-spacing: 1px;
-}
-
 /* ---- 12. 管理后台 ---- */
 .admin-page {
   padding: var(--space-6);
@@ -1308,8 +1154,6 @@ code, kbd, pre { font-family: var(--font-mono); }
   padding: 2px 8px;
   border-radius: var(--radius-full);
 }
-.code-list-level.vip_month { background: rgba(52, 152, 219, 0.15); color: var(--info); }
-.code-list-level.vip_year { background: rgba(243, 156, 18, 0.15); color: var(--warning); }
 .code-list-status {
   font-size: 12px;
   color: var(--text-muted);
@@ -1418,8 +1262,6 @@ code, kbd, pre { font-family: var(--font-mono); }
   font-weight: 600;
 }
 .level-badge.free { background: rgba(160, 160, 184, 0.12); color: var(--text-secondary); }
-.level-badge.vip_month { background: rgba(52, 152, 219, 0.15); color: var(--info); }
-.level-badge.vip_year { background: rgba(243, 156, 18, 0.15); color: var(--warning); }
 
 /* ---- 16. 响应式 ---- */
 @media (max-width: 768px) {
@@ -1544,11 +1386,3 @@ code, kbd, pre { font-family: var(--font-mono); }
 .switch input:checked + .slider { background: var(--accent); }
 .switch input:checked + .slider::before { transform: translateX(22px); }
 
-/* ============ VIP Control Panel ============ */
-.vip-control-panel { display: flex; flex-direction: column; gap: 16px; }
-.vip-assign-form { display: flex; flex-direction: column; gap: 12px; }
-.vip-assign-form .form-row { display: flex; gap: 12px; align-items: flex-end; }
-.vip-assign-form .form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-label { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
-.code-generated-list .code-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin: 4px 0; background: var(--bg-dark); border-radius: 8px; font-size: 14px; }
-.code-item .copied { color: var(--success); }
