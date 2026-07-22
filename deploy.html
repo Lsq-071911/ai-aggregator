@@ -1,0 +1,3028 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="AI聚合 · 智能大模型中转站 - 一个聚合100+大模型的商业级AI对话平台" />
+  <meta name="theme-color" content="#0A0A0F" />
+  <title>AI聚合 · 智能大模型中转站</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- Supabase JS SDK (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+  <!-- 预加载动画 -->
+  <div class="preloader" id="preloader">
+    <div class="preloader-logo">
+      <div class="preloader-ring"></div>
+      <div class="preloader-core">AI</div>
+    </div>
+    <div class="preloader-bar"><div class="preloader-bar-fill"></div></div>
+    <div class="preloader-text">正在加载智能中枢...</div>
+  </div>
+
+  <!-- 应用根容器 -->
+  <div id="app-root"></div>
+
+  <!-- 全局 Toast 容器 -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- 全局 Modal 容器 -->
+  <div class="modal-overlay" id="modal-overlay" style="display:none;"></div>
+
+  <!-- 脚本按依赖顺序加载 -->
+  <script src="supabase.js"></script>
+  <script src="utils.js"></script>
+  <script src="models.js"></script>
+  <script src="api.js"></script>
+  <script src="auth.js"></script>
+  <script src="member.js"></script>
+  <script src="chat.js"></script>
+  <script src="admin.js"></script>
+  <script src="app.js"></script>
+<script>
+/* === utils.js === */
+/**
+ * utils.js — 全局工具函数库
+ * ============================================================
+ * 所有模块通用的辅助函数，无外部依赖。
+ */
+
+const Utils = (function () {
+  'use strict';
+
+  // ============ 安全 ============
+
+  /**
+   * HTML 转义，防止 XSS
+   */
+  function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
+  /**
+   * 移除 HTML 标签
+   */
+  function stripHtml(html) {
+    if (!html) return '';
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+  }
+
+  // ============ 函数工具 ============
+
+  /**
+   * 防抖
+   */
+  function debounce(fn, delay) {
+    let timer = null;
+    return function (...args) {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn.apply(this, args), delay);
+    };
+  }
+
+  /**
+   * 节流
+   */
+  function throttle(fn, delay) {
+    let last = 0;
+    let timer = null;
+    return function (...args) {
+      const now = Date.now();
+      const remaining = delay - (now - last);
+      if (remaining <= 0) {
+        if (timer) { clearTimeout(timer); timer = null; }
+        last = now;
+        fn.apply(this, args);
+      } else if (!timer) {
+        timer = setTimeout(() => {
+          last = Date.now();
+          timer = null;
+          fn.apply(this, args);
+        }, remaining);
+      }
+    };
+  }
+
+  // ============ 日期格式化 ============
+
+  /**
+   * 格式化日期: "2024-01-15 14:30"
+   */
+  function formatDate(iso) {
+    if (!iso) return '—';
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '—';
+      const pad = (n) => String(n).padStart(2, '0');
+      return (
+        d.getFullYear() +
+        '-' + pad(d.getMonth() + 1) +
+        '-' + pad(d.getDate()) +
+        ' ' + pad(d.getHours()) +
+        ':' + pad(d.getMinutes())
+      );
+    } catch (e) {
+      return '—';
+    }
+  }
+
+  /**
+   * 相对时间: "3分钟前"、"昨天"等
+   */
+  function formatRelativeTime(iso) {
+    if (!iso) return '—';
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '—';
+      const now = Date.now();
+      const diff = now - d.getTime();
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+
+      if (seconds < 60) return '刚刚';
+      if (minutes < 60) return minutes + '分钟前';
+      if (hours < 24) return hours + '小时前';
+      if (days === 1) return '昨天';
+      if (days < 7) return days + '天前';
+      if (days < 30) return Math.floor(days / 7) + '周前';
+      if (days < 365) return Math.floor(days / 30) + '个月前';
+      return Math.floor(days / 365) + '年前';
+    } catch (e) {
+      return '—';
+    }
+  }
+
+  // ============ ID 生成 ============
+
+  /**
+   * 生成唯一 ID（简单版 UUID v4）
+   */
+  function generateId() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
+  /**
+   * 短 ID（用于本地模拟）
+   */
+  function shortId(len) {
+    len = len || 8;
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < len; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+
+  // ============ 剪贴板 ============
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(() => true).catch(() => fallbackCopy(text));
+    }
+    return fallbackCopy(text);
+    function fallbackCopy(t) {
+      const ta = document.createElement('textarea');
+      ta.value = t;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      ta.style.top = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        return true;
+      } catch (e) {
+        document.body.removeChild(ta);
+        return false;
+      }
+    }
+  }
+
+  // ============ Toast 通知 ============
+
+  function showToast(message, type) {
+    type = type || 'info';
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const icons = { success: '✓', error: '✗', warning: '⚠', info: 'ℹ' };
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + type;
+    toast.innerHTML = '<span class="toast-icon">' + icons[type] + '</span><span class="toast-message">' + escapeHtml(message) + '</span>';
+    container.appendChild(toast);
+
+    const remove = () => {
+      toast.classList.add('removing');
+      setTimeout(() => {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 300);
+    };
+
+    setTimeout(remove, 3500);
+    toast.addEventListener('click', remove);
+  }
+
+  // ============ Modal 弹窗 ============
+
+  function showModal(opts) {
+    const overlay = document.getElementById('modal-overlay');
+    if (!overlay) return;
+    const { title, content, confirmText, cancelText, onConfirm, onCancel, danger } = opts;
+
+    overlay.innerHTML = `
+      <div class="modal-box">
+        <div class="modal-title">${escapeHtml(title || '确认')}</div>
+        <div class="modal-content">${typeof content === 'string' ? escapeHtml(content) : ''}</div>
+        <div class="modal-actions">
+          <button class="btn btn-outline modal-cancel">${escapeHtml(cancelText || '取消')}</button>
+          <button class="btn ${danger ? 'btn-danger' : 'btn-primary'} modal-confirm">${escapeHtml(confirmText || '确认')}</button>
+        </div>
+      </div>
+    `;
+    overlay.style.display = 'flex';
+
+    const close = () => {
+      overlay.style.display = 'none';
+      overlay.innerHTML = '';
+    };
+
+    overlay.querySelector('.modal-cancel').addEventListener('click', () => {
+      close();
+      if (onCancel) onCancel();
+    });
+    overlay.querySelector('.modal-confirm').addEventListener('click', () => {
+      close();
+      if (onConfirm) onConfirm();
+    });
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) close();
+    });
+  }
+
+  // ============ localStorage 包装 ============
+
+  function storage(key, value) {
+    if (arguments.length === 1) {
+      // 读取
+      try {
+        const raw = localStorage.getItem('aihub_' + key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        // 检查过期
+        if (parsed._expires && parsed._expires < Date.now()) {
+          localStorage.removeItem('aihub_' + key);
+          return null;
+        }
+        return parsed._value !== undefined ? parsed._value : parsed;
+      } catch (e) {
+        return localStorage.getItem('aihub_' + key);
+      }
+    } else if (value === null) {
+      // 删除
+      localStorage.removeItem('aihub_' + key);
+    } else {
+      // 写入（支持第三个参数：过期时间-分钟）
+      const expires = arguments[2] ? Date.now() + arguments[2] * 60000 : undefined;
+      const toStore = expires ? { _value: value, _expires: expires } : value;
+      try {
+        localStorage.setItem('aihub_' + key, JSON.stringify(toStore));
+      } catch (e) {
+        console.warn('[Storage] 写入失败:', e.message);
+      }
+    }
+  }
+
+  // ============ 文本处理 ============
+
+  function truncateText(text, maxLen) {
+    if (!text) return '';
+    if (text.length <= maxLen) return text;
+    return text.slice(0, maxLen) + '...';
+  }
+
+  // ============ 验证 ============
+
+  function isValidEmail(email) {
+    if (!email) return false;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  function isValidPassword(pw) {
+    if (!pw) return false;
+    // 至少8位，包含字母和数字
+    return pw.length >= 8 && /[a-zA-Z]/.test(pw) && /\d/.test(pw);
+  }
+
+  // ============ JWT 解析 ============
+
+  function parseJWT(token) {
+    try {
+      if (!token) return null;
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map(function (c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          })
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ============ 错误处理 ============
+
+  const errorLog = [];
+
+  function errorHandler(error, context) {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      context: context || 'unknown',
+      message: error ? (error.message || String(error)) : 'Unknown error',
+      stack: error && error.stack ? error.stack : ''
+    };
+
+    errorLog.push(entry);
+
+    // 只保留最近 100 条
+    if (errorLog.length > 100) errorLog.shift();
+
+    // 写入 localStorage
+    try {
+      storage('error_log', errorLog);
+    } catch (e) { /* ignore */ }
+
+    console.error('[AI聚合 Error]', context, entry.message, entry);
+
+    // 向用户显示友好提示
+    const userMsg = context ? '[' + context + '] ' + entry.message : entry.message;
+    if (entry.message && entry.message.length < 80) {
+      showToast(userMsg, 'error');
+    } else {
+      showToast('操作失败，请稍后重试', 'error');
+    }
+  }
+
+  /**
+   * 获取错误日志
+   */
+  function getErrorLog() {
+    return errorLog;
+  }
+
+  // ============ 其他工具 ============
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * 估算 token 数量（粗略：4 字符 ≈ 1 token）
+   */
+  function estimateTokens(text) {
+    if (!text) return 0;
+    // 中文按 1.5 字符/token，英文按 4 字符/token
+    const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+    const otherChars = text.length - chineseChars;
+    return Math.ceil(chineseChars / 1.5 + otherChars / 4);
+  }
+
+  return {
+    escapeHtml,
+    stripHtml,
+    debounce,
+    throttle,
+    formatDate,
+    formatRelativeTime,
+    generateId,
+    shortId,
+    copyToClipboard,
+    showToast,
+    showModal,
+    storage,
+    truncateText,
+    isValidEmail,
+    isValidPassword,
+    parseJWT,
+    errorHandler,
+    errorLog,
+    getErrorLog,
+    sleep,
+    estimateTokens
+  };
+})();
+
+/* === models.js === */
+/**
+ * models.js — AI 模型配置（OpenRouter 聚合 50+ 模型）
+ * ============================================================
+ * 所有模型通过 OpenRouter 统一代理访问。
+ * 数据来源：https://openrouter.ai/models
+ */
+
+const ModelRegistry = (function () {
+  'use strict';
+
+  /**
+   * 模型原始数据数组
+   */
+  const MODELS = [
+    // ── OpenAI ──
+    { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'OpenAI', category: 'premium', desc: '多模态旗舰模型，支持视觉理解', contextWindow: 128000, maxTokens: 4096, pricing: { input: 2.50, output: 10.00 }, tags: ['multimodal', 'fast', 'vision'], icon: '⚡' },
+    { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', category: 'premium', desc: '轻量高效，性价比之王', contextWindow: 128000, maxTokens: 16384, pricing: { input: 0.15, output: 0.60 }, tags: ['fast', 'cheap'], icon: '💨' },
+    { id: 'openai/o3-mini', name: 'o3 Mini', provider: 'OpenAI', category: 'premium', desc: '推理增强模型，擅长复杂逻辑', contextWindow: 200000, maxTokens: 100000, pricing: { input: 1.10, output: 4.40 }, tags: ['reasoning', 'math'], icon: '🧠' },
+    { id: 'openai/gpt-4.1', name: 'GPT-4.1', provider: 'OpenAI', category: 'premium', desc: '最新旗舰，全面升级', contextWindow: 1000000, maxTokens: 32768, pricing: { input: 2.00, output: 8.00 }, tags: ['latest', 'coding'], icon: '🌟' },
+
+    // ── Anthropic ──
+    { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'Anthropic', category: 'premium', desc: '编程与长文写作顶尖', contextWindow: 200000, maxTokens: 8192, pricing: { input: 3.00, output: 15.00 }, tags: ['coding', 'writing'], icon: '🧩' },
+    { id: 'anthropic/claude-3-opus', name: 'Claude 3 Opus', provider: 'Anthropic', category: 'premium', desc: '深度分析，学术研究首选', contextWindow: 200000, maxTokens: 4096, pricing: { input: 15.00, output: 75.00 }, tags: ['analysis', 'research'], icon: '🔬' },
+    { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'Anthropic', category: 'free', desc: '极速响应，轻量对话', contextWindow: 200000, maxTokens: 4096, pricing: { input: 0.25, output: 1.25 }, tags: ['fast', 'cheap'], icon: '⚡' },
+
+    // ── Google ──
+    { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'Google', category: 'premium', desc: 'Google 最新旗舰，超长上下文', contextWindow: 1000000, maxTokens: 65536, pricing: { input: 1.25, output: 10.00 }, tags: ['long-context', 'multimodal'], icon: '💎' },
+    { id: 'google/gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google', category: 'premium', desc: '极速推理，高吞吐', contextWindow: 1000000, maxTokens: 8192, pricing: { input: 0.10, output: 0.40 }, tags: ['fast', 'cheap'], icon: '⚡' },
+    { id: 'google/gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', provider: 'Google', category: 'free', desc: '免费轻量，日常对话', contextWindow: 1000000, maxTokens: 8192, pricing: { input: 0, output: 0 }, tags: ['free', 'fast'], icon: '🆓' },
+
+    // ── DeepSeek ──
+    { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', provider: 'DeepSeek', category: 'premium', desc: '国产顶尖通用模型，高性价比', contextWindow: 65536, maxTokens: 8192, pricing: { input: 0.27, output: 1.10 }, tags: ['chinese', 'coding'], icon: '🐋' },
+    { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1', provider: 'DeepSeek', category: 'premium', desc: '推理链增强，数学逻辑王者', contextWindow: 65536, maxTokens: 8192, pricing: { input: 0.55, output: 2.19 }, tags: ['reasoning', 'math'], icon: '🧮' },
+
+    // ── Meta ──
+    { id: 'meta-llama/llama-4-maverick', name: 'Llama 4 Maverick', provider: 'Meta', category: 'free', desc: 'Meta 开源最强，免费可用', contextWindow: 1000000, maxTokens: 8192, pricing: { input: 0, output: 0 }, tags: ['free', 'open-source'], icon: '🦙' },
+    { id: 'meta-llama/llama-4-scout', name: 'Llama 4 Scout', provider: 'Meta', category: 'free', desc: '轻量开源，快速部署', contextWindow: 1000000, maxTokens: 8192, pricing: { input: 0, output: 0 }, tags: ['free', 'fast'], icon: '🦙' },
+
+    // ── 阿里云 ──
+    { id: 'qwen/qwen-max', name: '通义千问 Max', provider: '阿里云', category: 'premium', desc: '阿里旗舰，中文能力顶尖', contextWindow: 32768, maxTokens: 8192, pricing: { input: 2.50, output: 10.00 }, tags: ['chinese', 'writing'], icon: '☁️' },
+    { id: 'qwen/qwen-plus', name: '通义千问 Plus', provider: '阿里云', category: 'premium', desc: '能力均衡，性价比高', contextWindow: 131072, maxTokens: 8192, pricing: { input: 0.80, output: 2.00 }, tags: ['chinese', 'balanced'], icon: '☁️' },
+    { id: 'qwen/qwq-32b', name: 'QwQ-32B', provider: '阿里云', category: 'free', desc: '推理增强开源模型', contextWindow: 131072, maxTokens: 8192, pricing: { input: 0, output: 0 }, tags: ['free', 'reasoning', 'chinese'], icon: '💭' },
+
+    // ── 智谱 ──
+    { id: 'zhipuai/glm-4', name: 'GLM-4', provider: '智谱', category: 'premium', desc: '智谱旗舰，多模态理解', contextWindow: 128000, maxTokens: 4096, pricing: { input: 2.00, output: 8.00 }, tags: ['chinese', 'multimodal'], icon: '🔷' },
+    { id: 'zhipuai/glm-4-flash', name: 'GLM-4 Flash', provider: '智谱', category: 'free', desc: '免费高速，日常使用', contextWindow: 128000, maxTokens: 4096, pricing: { input: 0, output: 0 }, tags: ['free', 'fast', 'chinese'], icon: '⏩' },
+
+    // ── Mistral ──
+    { id: 'mistral/mistral-large', name: 'Mistral Large', provider: 'Mistral', category: 'premium', desc: '欧洲顶尖，多语言优秀', contextWindow: 128000, maxTokens: 8192, pricing: { input: 2.00, output: 6.00 }, tags: ['multilingual', 'balanced'], icon: '🌪️' },
+    { id: 'mistral/mistral-small', name: 'Mistral Small', provider: 'Mistral', category: 'free', desc: '轻量级，快速推理', contextWindow: 32000, maxTokens: 4096, pricing: { input: 0, output: 0 }, tags: ['free', 'fast'], icon: '💨' },
+
+    // ── Cohere ──
+    { id: 'cohere/command-r-plus', name: 'Command R+', provider: 'Cohere', category: 'premium', desc: 'RAG 与企业场景优化', contextWindow: 128000, maxTokens: 4096, pricing: { input: 2.50, output: 10.00 }, tags: ['rag', 'enterprise'], icon: '🎯' },
+    { id: 'cohere/command-r', name: 'Command R', provider: 'Cohere', category: 'premium', desc: '高效指令遵循', contextWindow: 128000, maxTokens: 4096, pricing: { input: 0.50, output: 1.50 }, tags: ['instruction', 'balanced'], icon: '🎯' },
+
+    // ── xAI ──
+    { id: 'x-ai/grok-2', name: 'Grok-2', provider: 'xAI', category: 'premium', desc: 'Elon Musk 旗下，实时信息', contextWindow: 32768, maxTokens: 4096, pricing: { input: 2.00, output: 8.00 }, tags: ['realtime', 'fun'], icon: '🚀' },
+
+    // ── Perplexity ──
+    { id: 'perplexity/sonar', name: 'Sonar', provider: 'Perplexity', category: 'premium', desc: '联网搜索增强', contextWindow: 127000, maxTokens: 4096, pricing: { input: 1.00, output: 1.00 }, tags: ['search', 'realtime'], icon: '🔍' },
+
+    // ── 更多免费模型 ──
+    { id: 'google/gemma-2-27b-it', name: 'Gemma 2 27B', provider: 'Google', category: 'free', desc: '开源高效，免费可用', contextWindow: 8192, maxTokens: 4096, pricing: { input: 0, output: 0 }, tags: ['free', 'open-source'], icon: '💡' },
+    { id: 'microsoft/phi-4', name: 'Phi-4', provider: 'Microsoft', category: 'free', desc: '微软小模型，推理强', contextWindow: 16384, maxTokens: 4096, pricing: { input: 0, output: 0 }, tags: ['free', 'reasoning'], icon: '🔲' },
+    { id: 'nvidia/llama-3.1-nemotron-70b', name: 'Nemotron 70B', provider: 'NVIDIA', category: 'free', desc: 'NVIDIA 优化免费模型', contextWindow: 131072, maxTokens: 4096, pricing: { input: 0, output: 0 }, tags: ['free', 'enterprise'], icon: '🟢' },
+    { id: 'sao10k/l3.3-euryale-70b', name: 'Euryale 70B', provider: 'Sao10K', category: 'free', desc: '创意写作免费模型', contextWindow: 131072, maxTokens: 4096, pricing: { input: 0, output: 0 }, tags: ['free', 'creative'], icon: '✍️' },
+    { id: 'liquid/lfm-40b', name: 'LFM 40B', provider: 'Liquid AI', category: 'free', desc: '新型架构，高效推理', contextWindow: 32768, maxTokens: 4096, pricing: { input: 0, output: 0 }, tags: ['free', 'efficient'], icon: '💧' },
+    { id: 'cognitivecomputations/dolphin3.0-r1-mistral-24b', name: 'Dolphin 3.0 R1', provider: 'Cognitive', category: 'free', desc: '无审查开源模型', contextWindow: 32768, maxTokens: 4096, pricing: { input: 0, output: 0 }, tags: ['free', 'uncensored'], icon: '🐬' },
+    { id: 'moonshotai/moonlight-16b-a3b', name: 'Moonlight 16B', provider: '月之暗面', category: 'free', desc: 'MoE架构免费模型', contextWindow: 32768, maxTokens: 4096, pricing: { input: 0, output: 0 }, tags: ['free', 'moe', 'chinese'], icon: '🌙' }
+  ];
+
+  // 索引缓存
+  let providerIndex = null;
+  let categoryIndex = null;
+
+  function buildIndexes() {
+    if (providerIndex) return;
+    providerIndex = {};
+    categoryIndex = {};
+    MODELS.forEach(function (m) {
+      if (!providerIndex[m.provider]) providerIndex[m.provider] = [];
+      providerIndex[m.provider].push(m);
+      if (!categoryIndex[m.category]) categoryIndex[m.category] = [];
+      categoryIndex[m.category].push(m);
+    });
+  }
+
+  // ============ 公开 API ============
+
+  function getAllModels() {
+    return MODELS.slice();
+  }
+
+  function getModelsByProvider() {
+    buildIndexes();
+    return Object.assign({}, providerIndex);
+  }
+
+  function getModelById(id) {
+    return MODELS.find(function (m) { return m.id === id; }) || null;
+  }
+
+  function getFreeModels() {
+    buildIndexes();
+    return (categoryIndex.free || []).slice();
+  }
+
+  function getPremiumModels() {
+    buildIndexes();
+    return (categoryIndex.premium || []).slice();
+  }
+
+  function getModelsByCategory(category) {
+    buildIndexes();
+    return (categoryIndex[category] || []).slice();
+  }
+
+  function searchModels(query) {
+    if (!query) return getAllModels();
+    const q = query.toLowerCase();
+    return MODELS.filter(function (m) {
+      return m.name.toLowerCase().includes(q) ||
+        m.provider.toLowerCase().includes(q) ||
+        m.desc.toLowerCase().includes(q) ||
+        m.tags.some(function (t) { return t.toLowerCase().includes(q); });
+    });
+  }
+
+  function getPopularModels(limit) {
+    limit = limit || 8;
+    // 热门推荐：高质量 + 常用
+    const popularIds = [
+      'openai/gpt-4o',
+      'openai/gpt-4o-mini',
+      'anthropic/claude-3.5-sonnet',
+      'google/gemini-2.5-pro',
+      'deepseek/deepseek-chat',
+      'qwen/qwen-max',
+      'google/gemini-2.0-flash',
+      'meta-llama/llama-4-maverick',
+      'anthropic/claude-3-haiku',
+      'deepseek/deepseek-r1',
+      'openai/o3-mini',
+      'qwen/qwq-32b'
+    ];
+    const result = [];
+    popularIds.forEach(function (id) {
+      const m = getModelById(id);
+      if (m && result.length < limit) result.push(m);
+    });
+    // 补齐
+    MODELS.forEach(function (m) {
+      if (result.length >= limit) return;
+      if (result.indexOf(m) === -1) result.push(m);
+    });
+    return result;
+  }
+
+  function getProviders() {
+    buildIndexes();
+    return Object.keys(providerIndex).sort();
+  }
+
+  return {
+    getAllModels,
+    getModelsByProvider,
+    getModelById,
+    getFreeModels,
+    getPremiumModels,
+    getModelsByCategory,
+    searchModels,
+    getPopularModels,
+    getProviders
+  };
+})();
+
+/* === auth.js === */
+/**
+ * auth.js — 用户认证模块（Supabase Auth + 本地降级）
+ * ============================================================
+ * 全免费模式：所有用户注册后即可登录，平等享受全部功能。
+ */
+
+const AuthManager = (function () {
+  'use strict';
+
+  let currentUser = null;
+  let currentSession = null;
+  let authListeners = [];
+
+  // ============ 本地降级模式 ============
+
+  function localRegister(email, password) {
+    const users = Utils.storage('local_users') || {};
+    if (users[email]) {
+      return { error: '该邮箱已注册' };
+    }
+    users[email] = {
+      email: email,
+      password: password,
+      createdAt: new Date().toISOString()
+    };
+    Utils.storage('local_users', users);
+
+    // 自动登录
+    const user = { id: 'local_' + Utils.shortId(12), email: email, created_at: new Date().toISOString() };
+    Utils.storage('local_current_user', user);
+    currentUser = user;
+    currentSession = { user: user };
+    notifyListeners('SIGNED_IN', currentSession);
+    return { data: { user: user }, error: null };
+  }
+
+  function localLogin(email, password) {
+    const users = Utils.storage('local_users') || {};
+
+    const userData = users[email];
+    if (!userData) {
+      return { error: '账号不存在，请先注册' };
+    }
+    if (userData.password !== password) {
+      return { error: '密码错误' };
+    }
+    const user = { id: 'local_' + Utils.shortId(12), email: email, created_at: userData.createdAt };
+    Utils.storage('local_current_user', user);
+    currentUser = user;
+    currentSession = { user: user };
+    notifyListeners('SIGNED_IN', currentSession);
+    return { data: { user: user }, error: null };
+  }
+
+  function localLogout() {
+    Utils.storage('local_current_user', null);
+    currentUser = null;
+    currentSession = null;
+    notifyListeners('SIGNED_OUT', null);
+  }
+
+  // ============ Supabase 模式 ============
+
+  function getClient() {
+    return window.supabaseHelper ? window.supabaseHelper.getClient() : null;
+  }
+
+  function isLocal() {
+    return window.supabaseHelper ? window.supabaseHelper.isLocal() : true;
+  }
+
+  async function init() {
+    if (isLocal()) {
+      const saved = Utils.storage('local_current_user');
+      if (saved) {
+        currentUser = saved;
+        currentSession = { user: saved };
+        notifyListeners('INITIAL_SESSION', currentSession);
+      }
+      return;
+    }
+
+    const client = getClient();
+    if (!client) return;
+
+    try {
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+      if (data && data.session) {
+        currentSession = data.session;
+        currentUser = data.session.user;
+        notifyListeners('INITIAL_SESSION', currentSession);
+      }
+    } catch (e) {
+      console.error('[Auth] 初始化失败:', e.message);
+    }
+  }
+
+  async function login(email, password) {
+    if (isLocal()) return localLogin(email, password);
+
+    const client = getClient();
+    if (!client) return { error: 'Supabase 未连接' };
+
+    try {
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
+      if (error) return { error: translateError(error.message) };
+      currentSession = data.session;
+      currentUser = data.user;
+      notifyListeners('SIGNED_IN', currentSession);
+      return { data: data, error: null };
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
+  async function register(email, password) {
+    if (isLocal()) return localRegister(email, password);
+
+    const client = getClient();
+    if (!client) return { error: 'Supabase 未连接' };
+
+    try {
+      const { data, error } = await client.auth.signUp({ email, password });
+      if (error) return { error: translateError(error.message) };
+
+      if (data.user && data.session) {
+        currentSession = data.session;
+        currentUser = data.user;
+        notifyListeners('SIGNED_IN', currentSession);
+      }
+
+      return { data: data, error: null };
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
+  async function logout() {
+    if (isLocal()) {
+      localLogout();
+      return;
+    }
+
+    const client = getClient();
+    if (!client) return;
+
+    try {
+      await client.auth.signOut();
+    } catch (e) {
+      console.error('[Auth] 注销失败:', e.message);
+    }
+
+    currentUser = null;
+    currentSession = null;
+    notifyListeners('SIGNED_OUT', null);
+  }
+
+  async function resetPassword(email) {
+    if (!Utils.isValidEmail(email)) {
+      return { error: '请输入有效的邮箱地址' };
+    }
+
+    if (isLocal()) {
+      return { error: '本地模式下不支持密码重置' };
+    }
+
+    const client = getClient();
+    if (!client) return { error: 'Supabase 未连接' };
+
+    try {
+      const { error } = await client.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/index.html'
+      });
+      if (error) return { error: translateError(error.message) };
+      return { error: null };
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
+  function getCurrentUser() {
+    return currentUser;
+  }
+
+  function isLoggedIn() {
+    return !!currentUser;
+  }
+
+  function getSession() {
+    return currentSession;
+  }
+
+  function onAuthStateChange(callback) {
+    authListeners.push(callback);
+    return function () {
+      authListeners = authListeners.filter(function (l) { return l !== callback; });
+    };
+  }
+
+  function notifyListeners(event, session) {
+    authListeners.forEach(function (cb) {
+      try { cb(event, session); } catch (e) { /* ignore */ }
+    });
+  }
+
+  function translateError(msg) {
+    if (!msg) return '未知错误';
+    const map = {
+      'Invalid login credentials': '邮箱或密码错误',
+      'Email not confirmed': '邮箱尚未验证，请检查收件箱',
+      'User already registered': '该邮箱已注册',
+      'Password should be at least 6 characters': '密码至少需要8位字符',
+      'Email rate limit exceeded': '请求过于频繁，请稍后再试'
+    };
+    for (var key in map) {
+      if (msg.toLowerCase().indexOf(key.toLowerCase()) !== -1) return map[key];
+    }
+    return msg;
+  }
+
+  // ============ 页面渲染 ============
+
+  let currentTab = 'login';
+
+  function renderLoginPage(container) {
+    currentTab = 'login';
+    renderAuthForm(container);
+  }
+
+  function switchTab(tab, container) {
+    currentTab = tab;
+    renderAuthForm(container);
+  }
+
+  function renderAuthForm(container) {
+    const isForgot = currentTab === 'forgot';
+
+    let html = '<div class="auth-page"><div class="auth-card">';
+    html += '<div class="auth-logo"><div class="auth-logo-icon">AI</div><h2>AI聚合</h2></div>';
+
+    if (isLocal()) {
+      html += '<div class="local-mode-banner">本地模式运行中 · 所有功能免费开放</div>';
+    }
+
+    if (!isForgot) {
+      html += '<div class="auth-tabs">';
+      html += '<button class="auth-tab' + (currentTab === 'login' ? ' active' : '') + '" id="auth-tab-login">登录</button>';
+      html += '<button class="auth-tab' + (currentTab === 'register' ? ' active' : '') + '" id="auth-tab-register">注册</button>';
+      html += '</div>';
+    } else {
+      html += '<h3 style="text-align:center;margin-bottom:20px;color:var(--text-secondary);">重置密码</h3>';
+    }
+
+    html += '<form id="auth-form" autocomplete="on">';
+    html += '<div class="form-group"><label class="form-label">邮箱地址</label>';
+    html += '<input type="email" class="form-input" id="auth-email" placeholder="your@email.com" required autocomplete="email" /></div>';
+
+    if (!isForgot) {
+      html += '<div class="form-group"><label class="form-label">密码</label>';
+      html += '<input type="password" class="form-input" id="auth-password" placeholder="至少8位，含字母+数字" required autocomplete="' + (currentTab === 'login' ? 'current-password' : 'new-password') + '" /></div>';
+
+      if (currentTab === 'register') {
+        html += '<div class="form-group"><label class="form-label">确认密码</label>';
+        html += '<input type="password" class="form-input" id="auth-password-confirm" placeholder="再次输入密码" required /></div>';
+      }
+    }
+
+    html += '<div class="form-error" id="auth-error"></div>';
+
+    html += '<button type="submit" class="btn btn-primary btn-block btn-lg" id="auth-submit">';
+    if (isForgot) html += '发送重置链接';
+    else if (currentTab === 'register') html += '创建账号';
+    else html += '登录';
+    html += '</button>';
+    html += '</form>';
+
+    html += '<div style="text-align:center;margin-top:var(--space-5);font-size:13px;">';
+    if (isForgot) {
+      html += '<a href="javascript:void(0)" id="auth-back-login">← 返回登录</a>';
+    } else if (currentTab === 'login') {
+      html += '<a href="javascript:void(0)" id="auth-forgot">忘记密码？</a>';
+      html += '<div style="margin-top:8px;color:var(--text-muted);">还没有账号？<a href="javascript:void(0)" id="auth-go-register">立即注册</a></div>';
+    } else {
+      html += '<div style="color:var(--text-muted);">已有账号？<a href="javascript:void(0)" id="auth-go-login">立即登录</a></div>';
+    }
+    html += '</div>';
+
+    html += '<div style="margin-top:var(--space-6);"><div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">';
+    html += '<div style="flex:1;height:1px;background:var(--border-color);"></div>';
+    html += '<span style="font-size:12px;color:var(--text-muted);">其他登录方式</span>';
+    html += '<div style="flex:1;height:1px;background:var(--border-color);"></div></div>';
+    html += '<div style="display:flex;gap:10px;">';
+    html += '<button class="btn btn-outline" style="flex:1;" disabled title="即将支持">Google</button>';
+    html += '<button class="btn btn-outline" style="flex:1;" disabled title="即将支持">GitHub</button>';
+    html += '</div></div>';
+
+    html += '</div></div>';
+
+    container.innerHTML = html;
+    bindAuthEvents(container);
+  }
+
+  function bindAuthEvents(container) {
+    const form = container.querySelector('#auth-form');
+    const errorEl = container.querySelector('#auth-error');
+
+    const tabLogin = container.querySelector('#auth-tab-login');
+    const tabRegister = container.querySelector('#auth-tab-register');
+    if (tabLogin) tabLogin.addEventListener('click', function () { switchTab('login', container); });
+    if (tabRegister) tabRegister.addEventListener('click', function () { switchTab('register', container); });
+
+    const forgotLink = container.querySelector('#auth-forgot');
+    if (forgotLink) forgotLink.addEventListener('click', function () { switchTab('forgot', container); });
+
+    const backLogin = container.querySelector('#auth-back-login');
+    if (backLogin) backLogin.addEventListener('click', function () { switchTab('login', container); });
+
+    const goRegister = container.querySelector('#auth-go-register');
+    if (goRegister) goRegister.addEventListener('click', function () { switchTab('register', container); });
+    const goLogin = container.querySelector('#auth-go-login');
+    if (goLogin) goLogin.addEventListener('click', function () { switchTab('login', container); });
+
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const email = container.querySelector('#auth-email').value.trim();
+        const password = container.querySelector('#auth-password') ? container.querySelector('#auth-password').value : '';
+        const submitBtn = container.querySelector('#auth-submit');
+
+        if (!Utils.isValidEmail(email)) {
+          errorEl.textContent = '请输入有效的邮箱地址';
+          return;
+        }
+
+        const isForgot = currentTab === 'forgot';
+        if (!isForgot) {
+          if (!password) { errorEl.textContent = '请输入密码'; return; }
+          if (!Utils.isValidPassword(password)) {
+            errorEl.textContent = '密码至少8位，需包含字母和数字';
+            return;
+          }
+          if (currentTab === 'register') {
+            const confirm = container.querySelector('#auth-password-confirm');
+            if (confirm && confirm.value !== password) {
+              errorEl.textContent = '两次密码不一致';
+              return;
+            }
+          }
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="btn-spinner"></span> 处理中...';
+        errorEl.textContent = '';
+
+        const doAction = isForgot ? resetPassword(email) :
+          currentTab === 'register' ? register(email, password) :
+          login(email, password);
+
+        Promise.resolve(doAction).then(function (result) {
+          if (result.error) {
+            errorEl.textContent = result.error;
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = isForgot ? '发送重置链接' : (currentTab === 'register' ? '创建账号' : '登录');
+            return;
+          }
+
+          if (isForgot) {
+            errorEl.style.color = 'var(--success)';
+            errorEl.textContent = '重置链接已发送，请检查邮箱';
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '发送重置链接';
+          }
+        }).catch(function (err) {
+          errorEl.textContent = err.message || '操作失败';
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = isForgot ? '发送重置链接' : (currentTab === 'register' ? '创建账号' : '登录');
+        });
+      });
+    }
+
+    const pwInput = container.querySelector('#auth-password');
+    if (pwInput) {
+      pwInput.addEventListener('input', function () {
+        const pw = pwInput.value;
+        if (pw && !Utils.isValidPassword(pw)) {
+          pwInput.classList.add('error');
+        } else if (pw) {
+          pwInput.classList.remove('error');
+        }
+      });
+    }
+  }
+
+  return {
+    init,
+    login,
+    register,
+    logout,
+    resetPassword,
+    getCurrentUser,
+    isLoggedIn,
+    getSession,
+    onAuthStateChange,
+    renderLoginPage
+  };
+})();
+
+/* === member.js === */
+/**
+ * member.js — 会员模块（全免费模式）
+ * ============================================================
+ * 所有用户注册后即可免费使用全部 AI 功能，无任何限制。
+ */
+
+const MemberManager = (function () {
+  'use strict';
+
+  function init() {
+    // 无需初始化操作
+  }
+
+  // ============ 查询（全部开放） ============
+
+  function getMemberInfo() {
+    return {
+      level: 'free_all',
+      dailyUsage: 0,
+      dailyLimit: -1,
+      unlimited: true,
+      canUsePremium: true,
+      canSetApiKey: true
+    };
+  }
+
+  function isSuperAdmin() {
+    return false;
+  }
+
+  function isVipUser() {
+    return true;
+  }
+
+  function isVip() {
+    return true;
+  }
+
+  function getLevel() {
+    return 'free_all';
+  }
+
+  function canUseModel(model) {
+    return true;
+  }
+
+  function checkDailyLimit() {
+    return { allowed: true };
+  }
+
+  function incrementUsage() {
+    // 全免费模式，不追踪使用次数
+  }
+
+  // ============ 会员码激活（已废弃，保留兼容） ============
+
+  function activateCode(code) {
+    return { success: false, message: '全免费模式，无需激活码。所有功能已开放。' };
+  }
+
+  // ============ 页面渲染 ============
+
+  function renderMemberPage(container) {
+    let html = '<div class="member-page">';
+
+    // Header
+    html += '<div class="member-header">';
+    html += '<h2>设置中心</h2>';
+    html += '<p>全功能免费，配置你的 API Key 即可使用全部 AI 模型</p>';
+    html += '</div>';
+
+    // 状态卡片
+    html += '<div class="member-stats">';
+
+    html += '<div class="member-stat-card">';
+    html += '<div class="member-stat-label">当前模式</div>';
+    html += '<div class="member-stat-value"><span class="level-badge free_all" style="background:var(--success);">全功能免费</span></div>';
+    html += '</div>';
+
+    html += '<div class="member-stat-card">';
+    html += '<div class="member-stat-label">模型权限</div>';
+    html += '<div class="member-stat-value">全部 50+ 模型可用</div>';
+    html += '</div>';
+
+    html += '<div class="member-stat-card">';
+    html += '<div class="member-stat-label">调用限制</div>';
+    html += '<div class="member-stat-value" style="color:var(--success);">无限制</div>';
+    html += '</div>';
+
+    // API Key 设置
+    const savedKey = Utils.storage('openrouter_api_key');
+    html += '<div class="member-stat-card">';
+    html += '<div class="member-stat-label">自定义 API Key</div>';
+    html += '<div class="member-stat-value" style="font-size:14px;">';
+    html += savedKey ? '已设置 (' + savedKey.slice(0, 12) + '...)' : '<span style="color:var(--text-muted);">未设置</span>';
+    html += '</div>';
+    html += '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">从 <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--accent);">openrouter.ai/keys</a> 免费获取</div>';
+    html += '<button class="btn btn-outline btn-sm" style="margin-top:8px;" id="set-api-key-btn">设置 Key</button>';
+    html += '</div>';
+
+    html += '</div>'; // member-stats
+
+    // 说明
+    html += '<div style="text-align:center;margin-top:24px;padding:20px;background:var(--bg-card);border-radius:12px;">';
+    html += '<p style="color:var(--text-secondary);font-size:14px;line-height:1.8;">';
+    html += '本平台已切换为 <strong style="color:var(--success);">全免费模式</strong>。<br>';
+    html += '所有注册用户均可无限制使用全部 AI 模型。<br>';
+    html += '调用 AI 需要通过 OpenRouter API，请在上方配置你的 API Key。';
+    html += '</p>';
+    html += '</div>';
+
+    // 返回按钮
+    html += '<div style="text-align:center;margin-top:32px;"><button class="btn btn-outline" id="member-back-chat">← 返回聊天</button></div>';
+
+    html += '</div>';
+
+    container.innerHTML = html;
+    bindMemberEvents(container);
+  }
+
+  function bindMemberEvents(container) {
+    const backBtn = container.querySelector('#member-back-chat');
+    if (backBtn) {
+      backBtn.addEventListener('click', function () {
+        if (typeof App !== 'undefined' && App.navigate) {
+          App.navigate('/chat');
+        }
+      });
+    }
+
+    const apiKeyBtn = container.querySelector('#set-api-key-btn');
+    if (apiKeyBtn) {
+      apiKeyBtn.addEventListener('click', function () {
+        const currentKey = Utils.storage('openrouter_api_key') || '';
+        Utils.showModal({
+          title: '设置 OpenRouter API Key',
+          content: '请输入你的 OpenRouter API Key（从 <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a> 免费注册获取）<br><br><input id="api-key-input" type="password" style="width:100%;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);border-radius:8px;color:white;" placeholder="sk-or-..." value="' + Utils.escapeHtml(currentKey) + '" />',
+          confirmText: '保存',
+          onConfirm: function () {
+            const input = document.getElementById('api-key-input');
+            if (input) {
+              const key = input.value.trim();
+              ApiService.setUserKey(key || null);
+              if (key) {
+                Utils.showToast('API Key 已保存', 'success');
+              } else {
+                Utils.showToast('API Key 已清除', 'info');
+              }
+              setTimeout(function () { renderMemberPage(container); }, 300);
+            }
+          }
+        });
+      });
+    }
+  }
+
+  return {
+    init,
+    getMemberInfo,
+    getLevel,
+    isVip,
+    isVipUser,
+    isSuperAdmin,
+    canUseModel,
+    checkDailyLimit,
+    incrementUsage,
+    activateCode,
+    renderMemberPage
+  };
+})();
+
+/* === api.js === */
+/**
+ * api.js — AI API 调用封装（OpenRouter）
+ * ============================================================
+ * 通过 OpenRouter 统一代理访问所有大模型 API。
+ */
+
+const ApiService = (function () {
+  'use strict';
+
+  const API_BASE = 'https://openrouter.ai/api/v1';
+  const DEFAULT_MODEL = 'openai/gpt-4o-mini';
+  const MAX_RETRIES = 3;
+  const REQUEST_TIMEOUT = 60000;
+
+  let userApiKey = null;
+  let systemApiKey = null;
+  let currentController = null;
+
+  // ============ 配置 ============
+
+  function init(apiKey) {
+    userApiKey = apiKey || null;
+    // 尝试从 localStorage 恢复
+    if (!userApiKey) {
+      userApiKey = Utils.storage('openrouter_api_key');
+    }
+  }
+
+  function getKey() {
+    return userApiKey || systemApiKey || null;
+  }
+
+  function hasKey() {
+    return !!getKey();
+  }
+
+  function setSystemKey(key) {
+    systemApiKey = key;
+  }
+
+  function setUserKey(key) {
+    userApiKey = key;
+    if (key) {
+      Utils.storage('openrouter_api_key', key);
+    } else {
+      Utils.storage('openrouter_api_key', null);
+    }
+  }
+
+  // ============ 流式聊天 ============
+
+  /**
+   * 流式聊天请求
+   * @param {Array} messages - [{role:'user'|'assistant'|'system', content:'...'}]
+   * @param {String} model - OpenRouter 模型 ID
+   * @param {Object} callbacks - { onChunk(text), onDone(fullText, usage), onError(msg), onThinking(content) }
+   * @param {Object} options - { temperature, maxTokens, topP }
+   */
+  function streamChat(messages, model, callbacks, options) {
+    model = model || DEFAULT_MODEL;
+    options = options || {};
+
+    if (!hasKey()) {
+      if (callbacks.onError) callbacks.onError('请先配置 API Key（系统设置中可配置 API Key）');
+      return;
+    }
+
+    const body = {
+      model: model,
+      messages: messages.slice(-100), // 最多100条消息
+      stream: true,
+      temperature: options.temperature !== undefined ? options.temperature : 0.7,
+      max_tokens: options.maxTokens || 4096,
+      top_p: options.topP !== undefined ? options.topP : 1
+    };
+
+    if (options.reasoningEffort) {
+      body.reasoning = { effort: options.reasoningEffort };
+    }
+
+    // 创建 AbortController
+    currentController = new AbortController();
+
+    executeStreamWithRetry(body, callbacks, 0);
+  }
+
+  function executeStreamWithRetry(body, callbacks, retryCount) {
+    const doRequest = function () {
+      const controller = currentController;
+      if (!controller || controller.signal.aborted) return;
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + getKey(),
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'AI聚合'
+      };
+
+      fetch(API_BASE + '/chat/completions', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(body),
+        signal: controller.signal
+      })
+        .then(function (response) {
+          if (!response.ok) {
+            return handleApiError(response, body, callbacks, retryCount);
+          }
+          processStream(response, callbacks);
+        })
+        .catch(function (err) {
+          if (err.name === 'AbortError') {
+            // 取消是正常行为，不报错
+            return;
+          }
+
+          console.error('[API] 请求失败:', err.message);
+
+          if (retryCount < MAX_RETRIES) {
+            const delay = Math.pow(2, retryCount) * 1000;
+            console.log('[API] 第 ' + (retryCount + 1) + ' 次重试，等待 ' + delay + 'ms...');
+            setTimeout(function () {
+              if (currentController && !currentController.signal.aborted) {
+                executeStreamWithRetry(body, callbacks, retryCount + 1);
+              }
+            }, delay);
+          } else {
+            if (callbacks.onError) {
+              callbacks.onError('网络请求失败: ' + err.message);
+            }
+          }
+        });
+    };
+
+    doRequest();
+  }
+
+  function handleApiError(response, body, callbacks, retryCount) {
+    response.json().then(function (data) {
+      const errorMsg = data.error ? (data.error.message || JSON.stringify(data.error)) : '未知API错误';
+
+      // 429 速率限制 → 等待并重试
+      if (response.status === 429 && retryCount < MAX_RETRIES) {
+        const retryAfter = parseInt(response.headers.get('Retry-After') || '5', 10);
+        const delay = Math.max(retryAfter * 1000, Math.pow(2, retryCount) * 2000);
+        console.log('[API] 速率限制，等待 ' + delay + 'ms 重试...');
+        setTimeout(function () {
+          if (currentController && !currentController.signal.aborted) {
+            executeStreamWithRetry(body, callbacks, retryCount + 1);
+          }
+        }, delay);
+        return;
+      }
+
+      // 401/403 → Token 无效
+      if (response.status === 401 || response.status === 403) {
+        if (callbacks.onError) callbacks.onError('API Key 无效或已过期，请在系统设置中重新配置');
+        return;
+      }
+
+      // 402 → 余额不足
+      if (response.status === 402) {
+        if (callbacks.onError) callbacks.onError('OpenRouter 账户余额不足，请检查API Key余额');
+        return;
+      }
+
+      // 其他错误
+      if (retryCount < MAX_RETRIES && (response.status >= 500 || response.status === 0)) {
+        const delay = Math.pow(2, retryCount) * 1000;
+        setTimeout(function () {
+          if (currentController && !currentController.signal.aborted) {
+            executeStreamWithRetry(body, callbacks, retryCount + 1);
+          }
+        }, delay);
+      } else {
+        if (callbacks.onError) callbacks.onError('API 错误: ' + errorMsg);
+      }
+    }).catch(function () {
+      if (callbacks.onError) callbacks.onError('API 错误 (HTTP ' + response.status + ')');
+    });
+  }
+
+  function processStream(response, callbacks) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let fullText = '';
+    let buffer = '';
+
+    function read() {
+      if (!currentController || currentController.signal.aborted) {
+        reader.cancel();
+        return;
+      }
+
+      reader.read().then(function (result) {
+        if (result.done) {
+          // 流结束
+          if (callbacks.onDone) callbacks.onDone(fullText);
+          return;
+        }
+
+        buffer += decoder.decode(result.value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line || !line.startsWith('data: ')) continue;
+
+          const data = line.slice(6);
+          if (data === '[DONE]') {
+            if (callbacks.onDone) callbacks.onDone(fullText);
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+            const choice = parsed.choices && parsed.choices[0];
+
+            if (choice) {
+              // 处理普通内容
+              const delta = choice.delta;
+              if (delta && delta.content) {
+                fullText += delta.content;
+                if (callbacks.onChunk) callbacks.onChunk(delta.content);
+              }
+
+              // 处理推理内容（DeepSeek R1、o3-mini等）
+              if (delta && delta.reasoning_content) {
+                if (callbacks.onThinking) callbacks.onThinking(delta.reasoning_content);
+              }
+            }
+          } catch (e) {
+            // 忽略解析错误，继续处理
+          }
+        }
+
+        read();
+      }).catch(function (err) {
+        if (err.name !== 'AbortError') {
+          console.error('[API] 读取流失败:', err.message);
+          if (callbacks.onError) callbacks.onError('读取流失败: ' + err.message);
+        }
+      });
+    }
+
+    read();
+  }
+
+  function cancelStream() {
+    if (currentController) {
+      currentController.abort();
+      currentController = null;
+    }
+  }
+
+  function isStreaming() {
+    return currentController !== null && !currentController.signal.aborted;
+  }
+
+  // ============ 模型测试 ============
+
+  function testModel(modelId) {
+    if (!hasKey()) {
+      return Promise.reject(new Error('未配置 API Key'));
+    }
+
+    return fetch(API_BASE + '/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + getKey(),
+        'HTTP-Referer': window.location.origin
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [{ role: 'user', content: 'Hi' }],
+        max_tokens: 5
+      }),
+      signal: AbortSignal.timeout(15000)
+    }).then(function (res) {
+      if (!res.ok) {
+        return res.json().then(function (data) {
+          throw new Error(data.error ? data.error.message : '模型不可用 (HTTP ' + res.status + ')');
+        });
+      }
+      return res.json();
+    }).then(function (data) {
+      return { ok: true, model: data.model, usage: data.usage };
+    });
+  }
+
+  // ============ 使用情况 ============
+
+  function getUsage() {
+    if (!hasKey()) {
+      return Promise.reject(new Error('未配置 API Key'));
+    }
+
+    // 尝试获取当前 Key 的额度信息
+    return fetch(API_BASE + '/auth/key', {
+      headers: {
+        'Authorization': 'Bearer ' + getKey()
+      },
+      signal: AbortSignal.timeout(10000)
+    }).then(function (res) {
+      if (!res.ok) throw new Error('无法获取使用情况');
+      return res.json();
+    }).then(function (data) {
+      return {
+        label: data.label || 'Unknown',
+        limit: data.limit || 0,
+        usage: data.usage || 0,
+        limitRemaining: data.limit_remaining || 0,
+        isFreeTier: data.is_free_tier || false
+      };
+    });
+  }
+
+  // 初始化
+  init();
+
+  return {
+    init,
+    getKey,
+    hasKey,
+    setSystemKey,
+    setUserKey,
+    streamChat,
+    cancelStream,
+    isStreaming,
+    testModel,
+    getUsage
+  };
+})();
+
+/* === chat.js === */
+/**
+ * chat.js — AI 聊天核心模块
+ * ============================================================
+ */
+
+const ChatManager = (function () {
+  'use strict';
+
+  let currentChatId = null;
+  let currentModel = null;
+  let conversations = [];
+  let currentMessages = [];
+  let isProcessing = false;
+  let domCache = {};
+
+  function init() {
+    // 加载对话列表
+    loadConversations();
+
+    // 设置默认模型
+    if (!currentModel) {
+      const saved = Utils.storage('current_model');
+      currentModel = saved || 'openai/gpt-4o-mini';
+    }
+  }
+
+  function loadConversations() {
+    const saved = Utils.storage('conversations');
+    if (saved && Array.isArray(saved)) {
+      conversations = saved;
+    } else {
+      conversations = [];
+    }
+  }
+
+  function saveConversations() {
+    Utils.storage('conversations', conversations);
+  }
+
+  function loadMessages(chatId) {
+    const key = 'messages_' + chatId;
+    const saved = Utils.storage(key);
+    if (saved && Array.isArray(saved)) {
+      return saved;
+    }
+    return [];
+  }
+
+  function saveMessages(chatId, messages) {
+    const key = 'messages_' + chatId;
+    Utils.storage(key, messages);
+  }
+
+  function getModel() {
+    return ModelRegistry.getModelById(currentModel) || ModelRegistry.getModelById('openai/gpt-4o-mini');
+  }
+
+  function selectModel(modelId) {
+    currentModel = modelId;
+    Utils.storage('current_model', modelId);
+    // 更新当前对话的模型
+    if (currentChatId) {
+      const conv = conversations.find(function (c) { return c.id === currentChatId; });
+      if (conv) {
+        conv.model_id = modelId;
+        saveConversations();
+      }
+    }
+    updateModelDisplay();
+  }
+
+  // ============ 对话管理 ============
+
+  function createNewChat() {
+    currentChatId = Utils.generateId();
+    currentMessages = [];
+    const conv = {
+      id: currentChatId,
+      title: '新对话',
+      model_id: currentModel,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    conversations.unshift(conv);
+    saveConversations();
+    saveMessages(currentChatId, []);
+    renderSidebar();
+    renderMessages();
+    updateModelDisplay();
+    focusInput();
+    return currentChatId;
+  }
+
+  function switchChat(chatId) {
+    currentChatId = chatId;
+    currentMessages = loadMessages(chatId);
+    const conv = conversations.find(function (c) { return c.id === chatId; });
+    if (conv) {
+      currentModel = conv.model_id || currentModel;
+    }
+    ApiService.cancelStream();
+    isProcessing = false;
+    renderMessages();
+    renderSidebar();
+    updateModelDisplay();
+  }
+
+  function deleteChat(chatId) {
+    conversations = conversations.filter(function (c) { return c.id !== chatId; });
+    saveConversations();
+    Utils.storage('messages_' + chatId, null);
+    if (currentChatId === chatId) {
+      if (conversations.length > 0) {
+        switchChat(conversations[0].id);
+      } else {
+        createNewChat();
+      }
+    } else {
+      renderSidebar();
+    }
+  }
+
+  function clearCurrentChat() {
+    if (!currentChatId) return;
+    currentMessages = [];
+    saveMessages(currentChatId, []);
+    renderMessages();
+  }
+
+  // ============ 发送消息 ============
+
+  function sendMessage(content) {
+    if (!content || !content.trim() || isProcessing) return;
+    content = content.trim();
+
+    // 如果没有当前对话，创建新的
+    if (!currentChatId) {
+      createNewChat();
+    }
+
+    // 权限检查
+    const model = getModel();
+
+    // 更新对话标题
+    const conv = conversations.find(function (c) { return c.id === currentChatId; });
+    if (conv && (!conv.title || conv.title === '新对话')) {
+      conv.title = Utils.truncateText(content.replace(/\n/g, ' '), 30);
+      saveConversations();
+      renderSidebar();
+    }
+
+    // 添加用户消息
+    const userMsg = {
+      id: Utils.generateId(),
+      role: 'user',
+      content: content,
+      created_at: new Date().toISOString()
+    };
+    currentMessages.push(userMsg);
+    saveMessages(currentChatId, currentMessages);
+    renderMessages();
+    clearInput();
+    scrollToBottom();
+
+    // 检查当前模型
+    const currentModelId = currentModel;
+
+    // 添加 AI 占位消息
+    const aiMsgId = Utils.generateId();
+    const aiMsg = {
+      id: aiMsgId,
+      role: 'assistant',
+      content: '',
+      model_id: currentModelId,
+      created_at: new Date().toISOString(),
+      streaming: true
+    };
+    currentMessages.push(aiMsg);
+    saveMessages(currentChatId, currentMessages);
+    renderMessages();
+    scrollToBottom();
+
+    isProcessing = true;
+    updateSendButton();
+
+    // 构建上下文
+    const contextMessages = buildContext();
+
+    // 检查 API Key
+    if (!ApiService.hasKey()) {
+      // 没有 Key，使用模拟回复
+      simulateReply(aiMsgId, content);
+      return;
+    }
+
+    // 调用 API
+    ApiService.streamChat(contextMessages, currentModelId, {
+      onChunk: function (text) {
+        const msg = currentMessages.find(function (m) { return m.id === aiMsgId; });
+        if (msg) {
+          msg.content += text;
+          updateMessageContent(aiMsgId, msg.content, true);
+        }
+      },
+      onDone: function (fullText) {
+        const msg = currentMessages.find(function (m) { return m.id === aiMsgId; });
+        if (msg) {
+          msg.content = fullText;
+          msg.streaming = false;
+          updateMessageContent(aiMsgId, fullText, false);
+        }
+        finishMessage(aiMsgId, fullText);
+      },
+      onError: function (msg) {
+        const m = currentMessages.find(function (x) { return x.id === aiMsgId; });
+        if (m) {
+          m.content = '错误: ' + msg;
+          m.streaming = false;
+        }
+        updateMessageContent(aiMsgId, m ? m.content : '错误: ' + msg, false);
+        finishMessage(aiMsgId, m ? m.content : '', true);
+      }
+    });
+  }
+
+  function buildContext() {
+    const systemMsg = {
+      role: 'system',
+      content: '你是 AI 聚合平台的智能助手，请用简体中文回答用户问题。回答应专业、准确、有帮助。支持 Markdown 格式，代码块请指定语言。'
+    };
+
+    const history = currentMessages
+      .filter(function (m) { return m.role !== 'system' && !m.streaming; })
+      .map(function (m) { return { role: m.role, content: m.content }; });
+
+    const model = getModel();
+    const maxTokens = model ? model.contextWindow : 128000;
+    // 粗略裁剪历史消息以避免超出上下文
+    let totalTokens = Utils.estimateTokens(systemMsg.content) + 200; // 预留
+    const result = [];
+    for (let i = history.length - 1; i >= 0; i--) {
+      const t = Utils.estimateTokens(history[i].content);
+      if (totalTokens + t > maxTokens * 0.8) break;
+      totalTokens += t;
+      result.unshift(history[i]);
+    }
+
+    return [systemMsg].concat(result.slice(-50));
+  }
+
+  function simulateReply(aiMsgId, userContent) {
+    // 模拟回复（无 API Key 时使用）
+    const model = getModel();
+    const modelName = model ? model.name : 'AI';
+    const responses = [
+      '您好！我是 ' + modelName + '。由于尚未配置 OpenRouter API Key，我目前处于模拟模式。\n\n您可以：\n1. 在**设置中心**设置您的 API Key\n2. 访问 openrouter.ai/keys 免费获取 Key\n\n配置后即可使用真实的 AI 对话功能。',
+      '这是一个模拟回复。\n\n您的问题是：「' + Utils.truncateText(userContent, 100) + '」\n\n在正式环境中，' + modelName + ' 将会为您提供高质量的回复。请配置 OpenRouter API Key 来启用完整功能。',
+      '感谢您的提问！\n\n当前系统运行在模拟模式，真实 AI 对话需要 OpenRouter API Key。\n\n```\n// 配置方法\n1. 访问 openrouter.ai/keys\n2. 创建 API Key\n3. 在设置中心填入 Key\n```\n\n配置完成后即可使用 50+ 大模型。'
+    ];
+
+    const response = responses[Math.floor(Math.random() * responses.length)];
+    const msg = currentMessages.find(function (m) { return m.id === aiMsgId; });
+    if (!msg) return;
+
+    // 模拟逐字输出
+    let index = 0;
+    const interval = setInterval(function () {
+      if (index < response.length) {
+        msg.content += response[index];
+        updateMessageContent(aiMsgId, msg.content, true);
+        index++;
+        scrollToBottom();
+      } else {
+        clearInterval(interval);
+        msg.streaming = false;
+        updateMessageContent(aiMsgId, msg.content, false);
+        finishMessage(aiMsgId, response);
+      }
+    }, 20);
+  }
+
+  function finishMessage(aiMsgId, fullText, isError) {
+    isProcessing = false;
+    if (!isError) {
+      // 更新对话时间和使用统计
+      const conv = conversations.find(function (c) { return c.id === currentChatId; });
+      if (conv) {
+        conv.updated_at = new Date().toISOString();
+        saveConversations();
+      }
+      // 增加使用次数
+      MemberManager.incrementUsage();
+    }
+    saveMessages(currentChatId, currentMessages);
+    updateSendButton();
+    scrollToBottom();
+  }
+
+  // ============ 渲染 ============
+
+  function renderChatPage(container) {
+    if (!currentChatId && conversations.length > 0) {
+      currentChatId = conversations[0].id;
+      currentMessages = loadMessages(currentChatId);
+      const conv = conversations[0];
+      if (conv) currentModel = conv.model_id || currentModel;
+    } else if (!currentChatId) {
+      createNewChat();
+    }
+
+    const html = `
+      <div class="app-layout" id="app-layout">
+        <div class="sidebar" id="sidebar">
+          <div class="sidebar-header">
+            <span class="sidebar-brand">AI聚合</span>
+            <button class="sidebar-new-chat" id="sidebar-new-chat" title="新对话">+</button>
+          </div>
+          <div class="sidebar-history" id="sidebar-history"></div>
+          <div class="sidebar-footer">
+            <div class="sidebar-user" id="sidebar-user"></div>
+          </div>
+        </div>
+        <button class="sidebar-toggle" id="sidebar-toggle" title="收起侧边栏">◀</button>
+        <div class="chat-area" id="chat-area">
+          <div class="chat-header">
+            <div class="chat-model-selector" id="chat-model-selector">
+              <span class="model-select-trigger" id="model-select-trigger"></span>
+              <span class="model-select-chevron">▼</span>
+            </div>
+            <div class="chat-header-actions">
+              <button class="btn btn-ghost btn-sm" id="btn-member" title="设置中心">设置</button>
+              <button class="btn btn-ghost btn-sm" id="btn-admin" title="管理后台">管理</button>
+              <button class="btn btn-ghost btn-sm" id="btn-clear-chat" title="清空对话">清空</button>
+            </div>
+            <div class="model-dropdown" id="model-dropdown"></div>
+          </div>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-area">
+            <div class="chat-input-wrapper">
+              <textarea id="chat-input" placeholder="输入消息，Enter 发送，Shift+Enter 换行..." rows="1"></textarea>
+              <button class="send-btn" id="send-btn" title="发送">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+              </button>
+            </div>
+            <div class="chat-input-footer">
+              <span class="chat-input-hint">Shift+Enter 换行</span>
+              <span class="chat-input-charcount" id="char-count">0/8000</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    container.innerHTML = html;
+
+    // 缓存 DOM
+    domCache = {};
+    ['sidebar', 'sidebar-history', 'sidebar-user', 'sidebar-toggle',
+      'chat-model-selector', 'model-select-trigger', 'model-dropdown',
+      'chat-messages', 'chat-input', 'send-btn', 'char-count',
+      'btn-member', 'btn-admin', 'btn-clear-chat', 'sidebar-new-chat', 'app-layout'
+    ].forEach(function (id) {
+      domCache[id] = document.getElementById(id);
+    });
+
+    // 渲染各组件
+    renderSidebar();
+    renderModelDropdown();
+    updateModelDisplay();
+    renderMessages();
+
+    // 绑定事件
+    bindChatEvents();
+
+    // 页面首次打开时滚动到底部
+    setTimeout(scrollToBottom, 100);
+  }
+
+  function renderSidebar() {
+    if (!domCache['sidebar-history'] || !domCache['sidebar-user']) return;
+
+    let html = '';
+    conversations.forEach(function (conv) {
+      const activeClass = conv.id === currentChatId ? ' active' : '';
+      html += '<div class="chat-history-item' + activeClass + '" data-chat-id="' + conv.id + '">';
+      html += '<span class="chat-history-title">' + Utils.escapeHtml(conv.title || '新对话') + '</span>';
+      html += '<span class="chat-history-delete" data-delete-id="' + conv.id + '" title="删除">×</span>';
+      html += '</div>';
+    });
+
+    if (conversations.length === 0) {
+      html = '<div class="empty-state"><div class="empty-state-icon">💬</div><div class="empty-state-text">暂无对话</div></div>';
+    }
+
+    domCache['sidebar-history'].innerHTML = html;
+
+    // 绑定侧边栏事件
+    domCache['sidebar-history'].querySelectorAll('.chat-history-item').forEach(function (item) {
+      item.addEventListener('click', function (e) {
+        if (e.target.classList.contains('chat-history-delete')) return;
+        const chatId = item.getAttribute('data-chat-id');
+        switchChat(chatId);
+      });
+    });
+
+    domCache['sidebar-history'].querySelectorAll('.chat-history-delete').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const chatId = btn.getAttribute('data-delete-id');
+        Utils.showModal({
+          title: '删除对话',
+          content: '确定要删除这个对话吗？此操作不可撤销。',
+          confirmText: '删除',
+          danger: true,
+          onConfirm: function () { deleteChat(chatId); }
+        });
+      });
+    });
+
+    // 用户信息
+    const user = AuthManager.getCurrentUser();
+    domCache['sidebar-user'].innerHTML = `
+      <div class="sidebar-avatar">${user ? (user.email || '?')[0].toUpperCase() : '?'}</div>
+      <div class="sidebar-user-info">
+        <div class="sidebar-user-name">${Utils.escapeHtml(user ? (user.email || '用户') : '未登录')}</div>
+        <div class="sidebar-user-level" style="color:var(--success);">全功能免费</div>
+      </div>
+      <button class="sidebar-logout" id="sidebar-logout" title="注销">⏻</button>
+    `;
+
+    const logoutBtn = document.getElementById('sidebar-logout');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', function () {
+        Utils.showModal({
+          title: '注销登录',
+          content: '确定要退出登录吗？',
+          confirmText: '注销',
+          danger: true,
+          onConfirm: function () {
+            AuthManager.logout().then(function () {
+              if (typeof App !== 'undefined' && App.navigate) {
+                App.navigate('/login');
+              }
+            });
+          }
+        });
+      });
+    }
+  }
+
+  function renderModelDropdown() {
+    if (!domCache['model-dropdown']) return;
+    const providers = ModelRegistry.getModelsByProvider();
+    const providerNames = Object.keys(providers).sort();
+
+    let html = '<div class="model-search"><input type="text" id="model-search-input" placeholder="搜索模型..." /></div>';
+    html += '<div class="model-list">';
+
+    providerNames.forEach(function (provider) {
+      const models = providers[provider];
+      html += '<div class="model-group-header" data-provider="' + Utils.escapeHtml(provider) + '">';
+      html += '<span>▼</span> ' + Utils.escapeHtml(provider) + ' (' + models.length + ')';
+      html += '</div>';
+      html += '<div class="model-group-items" data-provider="' + Utils.escapeHtml(provider) + '">';
+      models.forEach(function (m) {
+        const activeClass = m.id === currentModel ? ' active' : '';
+        html += '<div class="model-item' + activeClass + '" data-model-id="' + Utils.escapeHtml(m.id) + '">';
+        html += '<span class="model-item-icon">' + (m.icon || '🤖') + '</span>';
+        html += '<div class="model-item-info">';
+        html += '<div class="model-item-name">' + Utils.escapeHtml(m.name) + '</div>';
+        html += '<div class="model-item-desc">' + Utils.escapeHtml(m.desc) + '</div>';
+        html += '</div>';
+        html += '<span class="model-item-badge">可用</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+
+    html += '</div>';
+    domCache['model-dropdown'].innerHTML = html;
+
+    // 搜索
+    const searchInput = document.getElementById('model-search-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', function () {
+        const q = searchInput.value.toLowerCase();
+        domCache['model-dropdown'].querySelectorAll('.model-item').forEach(function (item) {
+          const text = item.textContent.toLowerCase();
+          item.style.display = q && !text.includes(q) ? 'none' : '';
+        });
+        // 显示/隐藏分组头
+        domCache['model-dropdown'].querySelectorAll('.model-group-header').forEach(function (header) {
+          const provider = header.getAttribute('data-provider');
+          const items = domCache['model-dropdown'].querySelectorAll('.model-group-items[data-provider="' + provider + '"] .model-item');
+          let visible = false;
+          items.forEach(function (it) { if (it.style.display !== 'none') visible = true; });
+          header.style.display = q && !visible ? 'none' : '';
+        });
+      });
+    }
+
+    // 模型选择
+    domCache['model-dropdown'].querySelectorAll('.model-item').forEach(function (item) {
+      item.addEventListener('click', function () {
+        const modelId = item.getAttribute('data-model-id');
+        selectModel(modelId);
+        domCache['model-dropdown'].classList.remove('open');
+      });
+    });
+
+    // 分组折叠
+    domCache['model-dropdown'].querySelectorAll('.model-group-header').forEach(function (header) {
+      header.addEventListener('click', function () {
+        const provider = header.getAttribute('data-provider');
+        const items = domCache['model-dropdown'].querySelector('.model-group-items[data-provider="' + provider + '"]');
+        if (items) {
+          items.classList.toggle('collapsed');
+          header.querySelector('span').textContent = items.classList.contains('collapsed') ? '▶' : '▼';
+        }
+      });
+    });
+  }
+
+  function updateModelDisplay() {
+    if (!domCache['model-select-trigger']) return;
+    const model = getModel();
+    if (model) {
+      domCache['model-select-trigger'].innerHTML = (model.icon || '🤖') + ' ' + Utils.escapeHtml(model.name);
+    }
+  }
+
+  function renderMessages() {
+    if (!domCache['chat-messages']) return;
+
+    if (!currentMessages || currentMessages.length === 0) {
+      domCache['chat-messages'].innerHTML = `
+        <div class="chat-welcome">
+          <div class="welcome-icon">✨</div>
+          <div class="welcome-title">你好，我是 AI 聚合助手</div>
+          <div class="welcome-subtitle">聚合 50+ 大模型，智能回答你的任何问题。<br>支持代码高亮、Markdown 渲染、流式输出。</div>
+          <div class="welcome-suggestions">
+            <span class="welcome-suggestion" data-prompt="用Python写一个快速排序算法">Python快速排序</span>
+            <span class="welcome-suggestion" data-prompt="解释量子计算的基本原理">解释量子计算</span>
+            <span class="welcome-suggestion" data-prompt="帮我写一份商业计划书大纲">写商业计划书</span>
+            <span class="welcome-suggestion" data-prompt="比较React和Vue的优缺点">React vs Vue</span>
+          </div>
+        </div>
+      `;
+
+      // 建议点击
+      domCache['chat-messages'].querySelectorAll('.welcome-suggestion').forEach(function (el) {
+        el.addEventListener('click', function () {
+          const prompt = el.getAttribute('data-prompt');
+          if (domCache['chat-input']) {
+            domCache['chat-input'].value = prompt;
+            updateCharCount();
+            sendMessage(prompt);
+          }
+        });
+      });
+
+      return;
+    }
+
+    let html = '';
+    currentMessages.forEach(function (msg) {
+      if (msg.role === 'system') return;
+
+      const isUser = msg.role === 'user';
+      const modelIcon = isUser ? '' : (getModel() ? getModel().icon || '🤖' : '🤖');
+
+      html += '<div class="message-row ' + msg.role + '" data-msg-id="' + msg.id + '">';
+      html += '<div class="message-avatar ' + msg.role + '">' + (isUser ? (AuthManager.getCurrentUser() ? (AuthManager.getCurrentUser().email || '?')[0].toUpperCase() : 'U') : modelIcon) + '</div>';
+      html += '<div class="message-body">';
+      html += '<div class="message-bubble ' + msg.role + '" id="bubble-' + msg.id + '">';
+
+      if (msg.content) {
+        html += renderMarkdown(msg.content);
+      } else if (msg.streaming) {
+        html += '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+      }
+
+      if (msg.streaming) {
+        html += '<span class="stream-cursor" id="cursor-' + msg.id + '"></span>';
+      }
+
+      html += '</div>';
+      html += '<div class="message-time">' + Utils.formatRelativeTime(msg.created_at) + '</div>';
+      html += '</div>';
+      html += '</div>';
+    });
+
+    // 最后一条正在流式输出时显示打字指示器
+    if (isProcessing && currentMessages.length > 0) {
+      const last = currentMessages[currentMessages.length - 1];
+      if (last.role === 'assistant' && !last.content && last.streaming) {
+        html += '<div class="message-row assistant">';
+        html += '<div class="message-avatar assistant">' + (getModel() ? getModel().icon || '🤖' : '🤖') + '</div>';
+        html += '<div class="message-body"><div class="message-bubble assistant">';
+        html += '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+        html += '</div></div></div>';
+      }
+    }
+
+    domCache['chat-messages'].innerHTML = html;
+
+    // 绑定代码复制按钮
+    domCache['chat-messages'].querySelectorAll('.code-copy-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const code = btn.getAttribute('data-code');
+        Utils.copyToClipboard(code).then(function () {
+          btn.textContent = '已复制';
+          btn.classList.add('copied');
+          setTimeout(function () {
+            btn.textContent = '复制';
+            btn.classList.remove('copied');
+          }, 2000);
+        });
+      });
+    });
+  }
+
+  function updateMessageContent(msgId, content, streaming) {
+    const bubble = document.getElementById('bubble-' + msgId);
+    if (!bubble) return;
+    bubble.innerHTML = renderMarkdown(content);
+    if (streaming) {
+      bubble.innerHTML += '<span class="stream-cursor" id="cursor-' + msgId + '"></span>';
+    }
+
+    // 重新绑定代码复制按钮
+    bubble.querySelectorAll('.code-copy-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const code = btn.getAttribute('data-code');
+        Utils.copyToClipboard(code).then(function () {
+          btn.textContent = '已复制';
+          btn.classList.add('copied');
+          setTimeout(function () {
+            btn.textContent = '复制';
+            btn.classList.remove('copied');
+          }, 2000);
+        });
+      });
+    });
+  }
+
+  function renderMarkdown(text) {
+    if (!text) return '';
+    let html = text;
+
+    // 转义HTML
+    html = Utils.escapeHtml(html);
+
+    // 代码块 (```)
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function (match, lang, code) {
+      return '<div class="code-block-wrapper">' +
+        '<div class="code-block-header"><span class="code-lang">' + (lang || 'code') + '</span>' +
+        '<button class="code-copy-btn" data-code="' + Utils.escapeHtml(code).replace(/"/g, '&quot;') + '">复制</button></div>' +
+        '<pre><code>' + code + '</code></pre></div>';
+    });
+
+    // 行内代码
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // 粗体
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+    // 斜体
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+    // ### 标题
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+    // 引用
+    html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+    // 无序列表
+    html = html.replace(/^[\-*] (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, function (match) {
+      return '<ul>' + match + '</ul>';
+    });
+
+    // 有序列表
+    html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+    // 水平线
+    html = html.replace(/^---$/gm, '<hr>');
+
+    // 链接
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+    // 换行
+    html = html.replace(/\n\n/g, '</p><p>');
+    html = html.replace(/\n/g, '<br>');
+
+    // 包裹段落
+    html = '<p>' + html + '</p>';
+
+    return html;
+  }
+
+  // ============ 事件绑定 ============
+
+  function bindChatEvents() {
+    // 模型选择器开关
+    if (domCache['chat-model-selector'] && domCache['model-dropdown']) {
+      domCache['chat-model-selector'].addEventListener('click', function (e) {
+        e.stopPropagation();
+        domCache['model-dropdown'].classList.toggle('open');
+      });
+
+      document.addEventListener('click', function () {
+        domCache['model-dropdown'].classList.remove('open');
+      });
+
+      domCache['model-dropdown'].addEventListener('click', function (e) {
+        e.stopPropagation();
+      });
+    }
+
+    // 侧边栏切换
+    if (domCache['sidebar-toggle'] && domCache['app-layout']) {
+      domCache['sidebar-toggle'].addEventListener('click', function () {
+        const layout = domCache['app-layout'];
+        const isCollapsed = layout.classList.contains('sidebar-collapsed');
+        if (isCollapsed) {
+          layout.classList.remove('sidebar-collapsed');
+          domCache['sidebar-toggle'].classList.remove('collapsed');
+          domCache['sidebar-toggle'].innerHTML = '◀';
+        } else {
+          layout.classList.add('sidebar-collapsed');
+          domCache['sidebar-toggle'].classList.add('collapsed');
+          domCache['sidebar-toggle'].innerHTML = '▶';
+        }
+      });
+    }
+
+    // 新对话
+    if (domCache['sidebar-new-chat']) {
+      domCache['sidebar-new-chat'].addEventListener('click', function () {
+        createNewChat();
+      });
+    }
+
+    // 发送按钮
+    if (domCache['send-btn']) {
+      domCache['send-btn'].addEventListener('click', function () {
+        const content = domCache['chat-input'] ? domCache['chat-input'].value : '';
+        sendMessage(content);
+      });
+    }
+
+    // 输入框
+    if (domCache['chat-input']) {
+      domCache['chat-input'].addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          const content = domCache['chat-input'].value;
+          sendMessage(content);
+        }
+      });
+
+      domCache['chat-input'].addEventListener('input', function () {
+        updateCharCount();
+        autoResizeTextarea();
+      });
+    }
+
+    // 清空对话
+    if (domCache['btn-clear-chat']) {
+      domCache['btn-clear-chat'].addEventListener('click', function () {
+        Utils.showModal({
+          title: '清空对话',
+          content: '确定要清空当前对话的所有消息吗？',
+          confirmText: '清空',
+          danger: true,
+          onConfirm: function () { clearCurrentChat(); }
+        });
+      });
+    }
+
+    // 设置按钮
+    if (domCache['btn-member']) {
+      domCache['btn-member'].addEventListener('click', function () {
+        if (typeof App !== 'undefined' && App.navigate) {
+          App.navigate('/member');
+        }
+      });
+    }
+
+    // 管理按钮
+    if (domCache['btn-admin']) {
+      domCache['btn-admin'].addEventListener('click', function () {
+        if (typeof App !== 'undefined' && App.navigate) {
+          App.navigate('/admin');
+        }
+      });
+    }
+  }
+
+  function updateCharCount() {
+    if (!domCache['chat-input'] || !domCache['char-count']) return;
+    const len = domCache['chat-input'].value.length;
+    domCache['char-count'].textContent = len + '/8000';
+    if (len > 8000) {
+      domCache['char-count'].style.color = 'var(--danger)';
+    } else {
+      domCache['char-count'].style.color = 'var(--text-muted)';
+    }
+  }
+
+  function autoResizeTextarea() {
+    const ta = domCache['chat-input'];
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+  }
+
+  function updateSendButton() {
+    if (!domCache['send-btn']) return;
+    if (isProcessing) {
+      domCache['send-btn'].disabled = true;
+      domCache['send-btn'].innerHTML = '<span class="btn-spinner"></span>';
+    } else {
+      domCache['send-btn'].disabled = false;
+      domCache['send-btn'].innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>';
+    }
+  }
+
+  function clearInput() {
+    if (domCache['chat-input']) {
+      domCache['chat-input'].value = '';
+      domCache['chat-input'].style.height = 'auto';
+      updateCharCount();
+    }
+  }
+
+  function focusInput() {
+    if (domCache['chat-input']) {
+      domCache['chat-input'].focus();
+    }
+  }
+
+  function scrollToBottom() {
+    if (domCache['chat-messages']) {
+      setTimeout(function () {
+        const el = domCache['chat-messages'];
+        if (el) el.scrollTop = el.scrollHeight;
+      }, 50);
+    }
+  }
+
+  // ============ 公开 API ============
+  return {
+    init,
+    renderChatPage,
+    createNewChat,
+    switchChat,
+    deleteChat,
+    sendMessage,
+    selectModel,
+    clearCurrentChat,
+    get currentChatId() { return currentChatId; },
+    get currentModel() { return currentModel; },
+    get conversations() { return conversations; }
+  };
+})();
+
+/* === admin.js === */
+/**
+ * admin.js — 管理后台模块
+ * ============================================================
+ */
+
+const AdminManager = (function () {
+  'use strict';
+
+  let currentTab = 'dashboard';
+
+  function init() {
+    // 无需初始化操作
+  }
+
+  function isAdmin() {
+    // 全免费模式：所有登录用户均可访问管理后台
+    return AuthManager.isLoggedIn();
+  }
+
+  function renderAdminPage(container) {
+    let html = '<div class="admin-page">';
+    html += '<div class="admin-header"><h2>管理后台</h2></div>';
+
+    // Tab 导航
+    html += '<div class="admin-tabs">';
+    html += '<button class="admin-tab' + (currentTab === 'dashboard' ? ' active' : '') + '" data-tab="dashboard">仪表盘</button>';
+    html += '<button class="admin-tab' + (currentTab === 'users' ? ' active' : '') + '" data-tab="users">用户管理</button>';
+    html += '<button class="admin-tab' + (currentTab === 'settings' ? ' active' : '') + '" data-tab="settings">系统设置</button>';
+    html += '</div>';
+
+    html += '<div class="admin-content" id="admin-content">';
+
+    if (currentTab === 'dashboard') {
+      html += renderDashboard();
+    } else if (currentTab === 'users') {
+      html += renderUsers();    } else if (currentTab === 'settings') {
+      html += renderSettings();
+    }
+
+    html += '</div>';
+    html += '</div>';
+
+    // 返回按钮
+    html += '<div style="text-align:center;margin-top:24px;"><button class="btn btn-outline" id="admin-back-chat">← 返回聊天</button></div>';
+
+    container.innerHTML = html;
+
+    bindAdminEvents(container);
+
+    // 加载数据
+    if (currentTab === 'dashboard') loadDashboardData();
+    if (currentTab === 'users') loadUsersData();
+    // 当前无需要加载的数据
+  }
+
+  function renderDashboard() {
+    return `
+      <div class="dashboard-grid">
+        <div class="stat-card blue">
+          <div class="stat-card-title">总用户数</div>
+          <div class="stat-card-value" id="stat-total-users">--</div>
+          <div class="stat-card-sub">所有注册用户</div>
+        </div>
+        <div class="stat-card purple">
+          <div class="stat-card-title">活跃用户</div>
+          <div class="stat-card-value" id="stat-active-users">--</div>
+          <div class="stat-card-sub">注册用户</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-card-title">今日调用</div>
+          <div class="stat-card-value" id="stat-today-calls">--</div>
+          <div class="stat-card-sub">今日 API 调用次数</div>
+        </div>
+        <div class="stat-card orange">
+          <div class="stat-card-title">活跃对话</div>
+          <div class="stat-card-value" id="stat-active-chats">--</div>
+          <div class="stat-card-sub">当前存在的对话</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderUsers() {
+    return `
+      <div class="table-toolbar">
+        <input type="text" id="user-search" placeholder="搜索用户邮箱..." class="form-input" style="max-width:300px;" />
+      </div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>邮箱</th>
+              <th>等级</th>
+              <th>注册时间</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="users-table-body">
+            <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-pagination" id="users-pagination"></div>
+    `;
+  }
+
+  function renderSettings() {
+    const config = Utils.storage('app_config') || {};
+    const user = AuthManager.getCurrentUser();
+    let html = '<div class="settings-page">';
+    
+    // 账号信息
+    html += '<div class="settings-section"><h3>管理员账号信息</h3>';
+    html += '<div class="settings-field"><label>邮箱</label><span>' + Utils.escapeHtml(user ? user.email : '-') + '</span></div>';
+    html += '<div class="settings-field"><label>角色</label><span style="color:var(--accent);">站长 · 超级管理员（全部AI免费无限使用）</span></div>';
+    html += '</div>';
+
+    // 站点设置
+    html += '<div class="settings-section"><h3>站点设置</h3>';
+    
+    html += '<div class="settings-field"><label>网站名称</label><input type="text" id="set-site-name" class="form-input" value="' + Utils.escapeHtml(config.siteName || 'AI聚合') + '" style="max-width:300px;" /></div>';
+    
+    html += '<div class="settings-field"><label>主题</label><select id="set-theme" class="form-input" style="max-width:200px;">';
+    html += '<option value="dark"' + (config.theme !== 'light' ? ' selected' : '') + '>深色</option>';
+    html += '<option value="light"' + (config.theme === 'light' ? ' selected' : '') + '>浅色</option>';
+    html += '</select></div>';
+
+    html += '<div class="settings-field"><label>默认模型</label><select id="set-default-model" class="form-input" style="max-width:300px;">';
+    const models = ModelRegistry ? ModelRegistry.getAllModels() : [];
+    models.forEach(function(m) {
+      const sel = (config.defaultModel || 'openai/gpt-4o-mini') === m.id ? ' selected' : '';
+      html += '<option value="' + m.id + '"' + sel + '>' + Utils.escapeHtml(m.name) + '</option>';
+    });
+    html += '</select></div>';
+
+    html += '<div class="settings-field"><label>每日免费调用次数</label><input type="number" id="set-daily-free-limit" class="form-input" value="' + (config.dailyFreeLimit || 20) + '" style="max-width:100px;" min="1" max="999" /></div>';
+
+    html += '<div class="settings-field" style="margin-top:16px;"><button class="btn btn-primary" id="btn-save-settings">保存设置</button></div>';
+    html += '</div>';
+
+    // 系统级 OpenRouter API Key（全局配置，所有AI模型依赖此Key工作）
+    html += '<div class="settings-section"><h3>OpenRouter API Key（全局配置）</h3>';
+    html += '<p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">'
+      + '所有 AI 模型通过 OpenRouter 统一调用。配置后全部用户均可使用真实 AI 对话。'
+      + '从 <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--accent);">openrouter.ai/keys</a> 免费注册获取 Key。</p>';
+    const savedKey = Utils.storage('openrouter_api_key') || '';
+    html += '<div class="settings-field"><label>API Key</label><input type="password" id="set-api-key" class="form-input" value="' + Utils.escapeHtml(savedKey) + '" placeholder="sk-or-..." style="max-width:450px;" /></div>';
+    html += '<div class="settings-field"><span style="font-size:12px;color:var(--text-muted);">当前状态：' + (savedKey ? '<span style="color:var(--success);">已配置（真实调用模式）</span>' : '<span style="color:var(--warning);">未配置（模拟模式，AI不真实工作）</span>') + '</span></div>';
+    html += '<div class="settings-field" style="margin-top:8px;"><button class="btn btn-primary" id="btn-save-api-key">保存 API Key</button><button class="btn btn-outline" id="btn-clear-api-key" style="margin-left:8px;">清除</button></div>';
+    html += '</div>';
+
+    html += '</div>';
+    return html;
+  }
+
+  function loadDashboardData() {
+    // 本地模式下的统计
+    const users = Utils.storage('local_users');
+    const totalUsers = users ? Object.keys(users).length : 0;
+
+    // 对话统计
+    const conversations = Utils.storage('conversations') || [];
+
+    // 今日调用
+    const todayUsage = memberInfo ? memberInfo.dailyUsage || 0 : 0;
+
+    document.getElementById('stat-total-users').textContent = totalUsers || '1';
+    document.getElementById('stat-active-users').textContent = vipUsers || '0';
+    document.getElementById('stat-today-calls').textContent = todayUsage;
+    document.getElementById('stat-active-chats').textContent = Array.isArray(conversations) ? conversations.length : 0;
+  }
+
+  function loadUsersData() {
+    const users = Utils.storage('local_users') || {};
+    const currentUser = AuthManager.getCurrentUser();
+    let userList = [];
+
+    if (currentUser) {
+      userList.push({
+        email: currentUser.email,
+        level: MemberManager.getLevel(),
+        created_at: currentUser.created_at || new Date().toISOString(),
+        status: 'active'
+      });
+    }
+
+    Object.keys(users).forEach(function (email) {
+      if (!userList.find(function (u) { return u.email === email; })) {
+        userList.push({
+          email: email,
+          level: 'free',
+          created_at: users[email].createdAt,
+          status: 'active'
+        });
+      }
+    });
+
+    renderUsersTable(userList);
+  }
+
+  function renderUsersTable(users) {
+    const tbody = document.getElementById('users-table-body');
+    if (!tbody) return;
+
+    if (users.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);">暂无用户数据</td></tr>';
+      return;
+    }
+
+    let html = '';
+    users.forEach(function (u) {
+      const levelNames = { free: '免费用户' };
+      html += '<tr>';
+      html += '<td>' + Utils.escapeHtml(u.email || '未知') + '</td>';
+      html += '<td><span class="level-badge ' + u.level + '">' + (levelNames[u.level] || u.level) + '</span></td>';
+      html += '<td>' + Utils.formatDate(u.created_at) + '</td>';
+      html += '<td><span class="status-badge ' + u.status + '">' + (u.status === 'active' ? '正常' : '禁用') + '</span></td>';
+      html += '<td>';
+      html += '<button class="btn btn-outline btn-xs" disabled title="本地模式不支持">编辑</button>';
+      html += '</td>';
+      html += '</tr>';
+    });
+
+    tbody.innerHTML = html;
+  }
+
+  function (c) {
+      html += '<tr>';
+      html += '<td><code style="font-family:monospace;font-size:14px;">' + Utils.escapeHtml(c.code) + '</code></td>';
+      html += '<td>' + (levelNames[c.level] || c.level) + '</td>';
+      html += '<td>' + (c.is_used ? '<span style="color:var(--text-muted);">已使用</span>' : '<span style="color:var(--success);">未使用</span>') + '</td>';
+      html += '<td>' + (c.used_by ? Utils.escapeHtml(c.used_by) : '-') + '</td>';
+      html += '<td>' + Utils.formatDate(c.created_at) + '</td>';
+      html += '</tr>';
+    });
+
+    tbody.innerHTML = html;
+  }
+
+  function bindAdminEvents(container) {
+    // Tab 切换
+    container.querySelectorAll('.admin-tab').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        currentTab = tab.getAttribute('data-tab');
+        renderAdminPage(container);
+      });
+    });
+
+    // 保存设置
+    const saveSettingsBtn = container.querySelector('#btn-save-settings');
+    if (saveSettingsBtn) {
+      saveSettingsBtn.addEventListener('click', function() {
+        const config = Utils.storage('app_config') || {};
+        config.siteName = (container.querySelector('#set-site-name') || {}).value || 'AI聚合';
+        config.theme = (container.querySelector('#set-theme') || {}).value || 'dark';
+        config.defaultModel = (container.querySelector('#set-default-model') || {}).value || 'openai/gpt-4o-mini';
+        config.dailyFreeLimit = parseInt((container.querySelector('#set-daily-free-limit') || {}).value, 10) || 20;
+        Utils.storage('app_config', config);
+        
+        // 应用主题
+        document.documentElement.setAttribute('data-theme', config.theme);
+        document.body.className = config.theme === 'light' ? 'light-theme' : '';
+        
+        // 应用默认模型
+        if (config.defaultModel) {
+          Utils.storage('current_model', config.defaultModel);
+        }
+        
+        // 更新网站标题
+        document.title = config.siteName + ' · 智能大模型中转站';
+        
+        Utils.showToast('设置已保存', 'success');
+      });
+    }
+
+    // 保存 API Key
+    const saveApiBtn = container.querySelector('#btn-save-api-key');
+    if (saveApiBtn) {
+      saveApiBtn.addEventListener('click', function() {
+        const keyInput = container.querySelector('#set-api-key');
+        if (keyInput) {
+          const key = keyInput.value.trim();
+          if (key) {
+            ApiService.setUserKey(key);
+            Utils.showToast('API Key 已保存', 'success');
+          } else {
+            Utils.showToast('请输入有效的 API Key', 'warning');
+          }
+        }
+      });
+    }
+
+    // 清除 API Key
+    const clearApiBtn = container.querySelector('#btn-clear-api-key');
+    if (clearApiBtn) {
+      clearApiBtn.addEventListener('click', function() {
+        ApiService.setUserKey(null);
+        const keyInput = container.querySelector('#set-api-key');
+        if (keyInput) keyInput.value = '';
+        Utils.showToast('API Key 已清除', 'info');
+      });
+    }
+
+    // 用户搜索
+    const userSearch = container.querySelector('#user-search');
+    if (userSearch) {
+      userSearch.addEventListener('input', function () {
+        const q = userSearch.value.toLowerCase();
+        const rows = container.querySelectorAll('#users-table-body tr');
+        rows.forEach(function (row) {
+          const text = row.textContent.toLowerCase();
+          row.style.display = q && !text.includes(q) ? 'none' : '';
+        });
+      });
+    }
+
+    // 返回
+    const backBtn = container.querySelector('#admin-back-chat');
+    if (backBtn) {
+      backBtn.addEventListener('click', function () {
+        if (typeof App !== 'undefined' && App.navigate) {
+          App.navigate('/chat');
+        }
+      });
+    }
+  }
+
+  return {
+    init,
+    isAdmin,
+    renderAdminPage,
+    generateCodes
+  };
+})();
+
+/* === app.js === */
+/**
+ * app.js — 应用主控制器，SPA 路由管理
+ * ============================================================
+ */
+
+const App = (function () {
+  'use strict';
+
+  // 全局状态
+  const AppState = {
+    currentUser: null,
+    currentPage: 'loading',
+    memberInfo: null,
+    isOnline: navigator.onLine,
+    config: { theme: 'dark' }
+  };
+
+  // 路由表
+  const routes = {
+    '/login': renderLoginPage,
+    '/chat': renderChatPageWrapper,
+    '/member': renderMemberPageWrapper,
+    '/admin': renderAdminPageWrapper,
+    '/': defaultRoute
+  };
+
+  // ============ 初始化 ============
+
+  async function init() {
+    try {
+      // 注册全局错误处理
+      setupErrorHandling();
+
+      // 初始化 Supabase
+      if (window.supabaseHelper) {
+        supabaseHelper = window.supabaseHelper;
+      }
+
+      // 初始化 Auth
+      AuthManager.onAuthStateChange(function (event, session) {
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          AppState.currentUser = session ? session.user : null;
+          AppState.currentPage = 'chat';
+          // 加载会员信息
+          MemberManager.init();
+          // 如果不是登录中，导航到聊天
+          if (event === 'SIGNED_IN') {
+            navigate('/chat');
+          }
+        } else if (event === 'SIGNED_OUT') {
+          AppState.currentUser = null;
+          AppState.memberInfo = null;
+          navigate('/login');
+        }
+      });
+
+      await AuthManager.init();
+
+      // 初始化会员
+      await MemberManager.init();
+
+      // 初始化聊天
+      ChatManager.init();
+
+      // 初始化管理后台
+      AdminManager.init();
+
+      // 导航到默认页面
+      const hash = parseHash();
+      navigate(hash || '/');
+
+      // 隐藏预加载动画
+      hideGlobalLoading();
+
+    } catch (e) {
+      console.error('[App] 初始化失败:', e);
+      Utils.showToast('应用初始化失败，请刷新页面', 'error');
+      hideGlobalLoading();
+    }
+  }
+
+  function parseHash() {
+    const hash = window.location.hash;
+    if (hash && hash.length > 1) {
+      return hash.substring(1);
+    }
+    return null;
+  }
+
+  function defaultRoute() {
+    if (AuthManager.isLoggedIn()) {
+      return '/chat';
+    }
+    return '/login';
+  }
+
+  // ============ 导航 ============
+
+  function navigate(path) {
+    // 解析路由
+    let route = path;
+    if (!routes[route]) {
+      // 处理默认路由
+      route = '/';
+    }
+
+    const handler = routes[route];
+    if (!handler) {
+      route = '/';
+    }
+
+    // 如果路由是默认，先解析
+    if (route === '/') {
+      route = defaultRoute();
+    }
+
+    // 更新 hash
+    if (window.location.hash !== '#' + path) {
+      window.history.pushState(null, '', '#' + path);
+    }
+
+    // 更新状态
+    AppState.currentPage = route;
+
+    // 渲染页面
+    renderPage(route);
+  }
+
+  function renderPage(pageName) {
+    const container = document.getElementById('app-root');
+    if (!container) return;
+
+    // 页面切换动画
+    container.style.opacity = '0';
+    container.style.transform = 'translateY(10px)';
+
+    setTimeout(function () {
+      const handler = routes[pageName];
+      if (handler) {
+        handler();
+      }
+      container.style.opacity = '1';
+      container.style.transform = 'translateY(0)';
+    }, 150);
+  }
+
+  // ============ 页面渲染 ============
+
+  function renderLoginPage() {
+    const container = document.getElementById('app-root');
+    if (!container) return;
+    if (AuthManager.isLoggedIn()) {
+      navigate('/chat');
+      return;
+    }
+    AuthManager.renderLoginPage(container);
+  }
+
+  function renderChatPageWrapper() {
+    const container = document.getElementById('app-root');
+    if (!container) return;
+    if (!AuthManager.isLoggedIn()) {
+      navigate('/login');
+      return;
+    }
+    ChatManager.renderChatPage(container);
+  }
+
+  function renderMemberPageWrapper() {
+    const container = document.getElementById('app-root');
+    if (!container) return;
+    if (!AuthManager.isLoggedIn()) {
+      navigate('/login');
+      return;
+    }
+    MemberManager.renderMemberPage(container);
+  }
+
+  function renderAdminPageWrapper() {
+    const container = document.getElementById('app-root');
+    if (!container) return;
+    if (!AuthManager.isLoggedIn()) {
+      navigate('/login');
+      return;
+    }
+    AdminManager.renderAdminPage(container);
+  }
+
+  // ============ 加载状态 ============
+
+  function showGlobalLoading() {
+    const preloader = document.querySelector('.preloader');
+    if (preloader) preloader.style.display = 'flex';
+  }
+
+  function hideGlobalLoading() {
+    const preloader = document.querySelector('.preloader');
+    if (preloader) {
+      preloader.style.opacity = '0';
+      setTimeout(function () {
+        preloader.style.display = 'none';
+      }, 600);
+    }
+  }
+
+  // ============ 错误处理 ============
+
+  function setupErrorHandling() {
+    // 全局 JS 错误
+    window.onerror = function (message, source, lineno, colno, error) {
+      console.error('[Global Error]', message, 'at', source, lineno + ':' + colno);
+      Utils.errorHandler(error || new Error(message), 'Global');
+      return true;
+    };
+
+    // Promise 未处理拒绝
+    window.addEventListener('unhandledrejection', function (event) {
+      console.error('[Unhandled Rejection]', event.reason);
+      Utils.errorHandler(event.reason, 'Promise');
+    });
+
+    // 网络状态变化
+    window.addEventListener('online', function () {
+      AppState.isOnline = true;
+      Utils.showToast('网络已恢复', 'info');
+    });
+
+    window.addEventListener('offline', function () {
+      AppState.isOnline = false;
+      Utils.showToast('网络已断开', 'warning');
+    });
+
+    // 路由变化监听
+    window.addEventListener('hashchange', function () {
+      const hash = parseHash();
+      if (hash && hash !== AppState.currentPage) {
+        navigate(hash);
+      }
+    });
+
+    // 浏览器的前进后退
+    window.addEventListener('popstate', function () {
+      const hash = parseHash();
+      if (hash && hash !== AppState.currentPage) {
+        navigate(hash);
+      }
+    });
+  }
+
+  // ============ 公开 API ============
+  return {
+    init,
+    navigate,
+    renderPage,
+    showGlobalLoading,
+    hideGlobalLoading,
+    get state() { return AppState; }
+  };
+})();
+
+// ============ 启动 ============
+document.addEventListener('DOMContentLoaded', function () {
+  // 等待 Supabase CDN 加载完成
+  const checkSupabaseAndStart = function () {
+    if (window.supabaseHelper) {
+      App.init();
+    } else if (window.supabase) {
+      // 手动初始化
+      try {
+        window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        App.init();
+      } catch (e) {
+        console.warn('Supabase 初始化失败，进入本地模式');
+        App.init();
+      }
+    } else {
+      // CDN 未加载，直接本地模式
+      console.warn('Supabase CDN 未加载，使用本地模式');
+      App.init();
+    }
+  };
+
+  // 给 CDN 一点加载时间
+  setTimeout(checkSupabaseAndStart, 500);
+});
+
+
+</script>
+</body>
+</html>
